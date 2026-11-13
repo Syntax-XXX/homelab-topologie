@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bearbeiten · Packet Tracer</title>
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/ui.css">
+<script src="/lib.js"></script>
+<style>
+  body { margin: 0; }
+  .ed { display: grid; grid-template-columns: minmax(340px, 460px) 1fr; height: calc(100dvh - 52px); }
+  .pane { overflow-y: auto; border-right: 1px solid var(--line); padding: 14px 16px 120px; }
+  .pv { position: relative; } .pv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; position: sticky; top: -14px; padding: 10px 0; background: var(--bg); z-index: 2; }
+  .tabs button { flex: 1; height: 38px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text-2); font: 500 13px var(--sans); cursor: pointer; }
+  .tabs button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .card { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); margin-bottom: 10px; }
+  .card > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 11px 12px; cursor: pointer; }
+  .card > summary::-webkit-details-marker { display: none; }
+  .card > summary .e-k { font: 11px var(--mono); color: var(--text-3); margin-left: auto; }
+  .card .body { padding: 0 12px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card .body .full { grid-column: 1 / -1; }
+  label { display: grid; gap: 4px; font: 11px var(--mono); color: var(--text-3); }
+  input, select, textarea { width: 100%; box-sizing: border-box; height: 36px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--bg); color: var(--text); padding: 0 10px; font: 13px var(--sans); }
+  textarea { height: auto; min-height: 70px; padding: 8px 10px; font: 12px var(--mono); resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .e-row { display: flex; gap: 8px; align-items: center; }
+  .e-b { height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font: 500 13px var(--sans); cursor: pointer; }
+  .e-b.pri { background: var(--accent); border-color: var(--accent); color: #111; }
+  .e-b.del { color: var(--bad); }
+  .e-b:disabled { opacity: .45; cursor: default; }
+  .add { width: 100%; border-style: dashed; color: var(--text-2); margin-bottom: 14px; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+  .lk { display: grid; grid-template-columns: 1fr 22px 1fr; gap: 6px; align-items: center; }
+  .lk span { text-align: center; color: var(--text-3); }
+  .e-bar { position: fixed; left: 0; bottom: 0; width: min(460px, 100%); box-sizing: border-box; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); display: grid; gap: 8px; z-index: 5; }
+  .msg { font: 12px var(--mono); color: var(--text-3); min-height: 16px; }
+  .msg.err { color: var(--bad); } .msg.ok { color: var(--ok); }
+  .e-hint { font-size: 12.5px; color: var(--text-3); margin: 0 0 12px; line-height: 1.45; }
+  .e-hint code { font: 11.5px var(--mono); color: var(--text-2); }
+  @media (max-width: 860px) {
+    .ed { grid-template-columns: 1fr; grid-template-rows: 42dvh 1fr; height: auto; }
+    .pv { order: -1; height: 42dvh; } .pane { border-right: 0; }
+    .e-bar { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="crumb"><a class="t3" href="/" id="ttl">Homelab</a><span class="t4">/</span><b>Bearbeiten</b></div><div class="sp"></div>
+  <a class="btn" href="/" style="text-decoration:none">Ansehen</a><button class="btn" id="theme" aria-label="Farbschema wechseln"></button></header>
+<div class="ed">
+  <div class="pane">
+    <div class="tabs" role="tablist"><button data-tab="dev" class="on">Geräte</button><button data-tab="lnk">Verbindungen</button><button data-tab="json">JSON</button></div>
+    <div id="body"></div>
+  </div>
+  <div class="pv"><iframe id="pv" title="Vorschau" src="/?embed&preview"></iframe></div>
+</div>
+<div class="e-bar">
+  <div class="e-row"><input id="tok" type="password" placeholder="Admin-Token" autocomplete="current-password" aria-label="Admin-Token">
+    <button class="e-b" id="reset" title="Ungespeicherte Änderungen verwerfen">Verwerfen</button><button class="e-b pri" id="save">Speichern</button></div>
+  <div class="msg" id="msg" role="status"></div>
+</div>
+<script>
+const KINDS = { switch: 'Switch', router: 'Router', server: 'Server', nas: 'NAS / Speicher', guest: 'VM / LXC', ct: 'Container', vps: 'Cloud-Server', cloud: 'CDN / Edge', globe: 'Internet', generic: 'Sonstiges' };
+const TYPES = { lan: 'LAN', sto: 'Storage', inet: 'Internet', tun: 'Tunnel / VPN', vm: 'VM-Netz', ct: 'Container-Netz' };
+let T = null, saved = '', tab = 'dev', open = new Set(), editable = true;
+const msg = (t, c = '') => { $('msg').textContent = t; $('msg').className = 'msg ' + c; };
+const dirty = () => JSON.stringify(T) !== saved;
+const slug = s => (s || '').toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 40) || 'geraet';
+const uniq = base => { let id = base, i = 2; while (T.devices.some(d => d.id === id)) id = `${base}-${i++}`; return id; };
+const opt = (o, v) => Object.entries(o).map(([k, l]) => `<option value="${esc(k)}" ${k === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
+const devOpt = v => T.devices.map(d => `<option value="${esc(d.id)}" ${d.id === v ? 'selected' : ''}>${esc(d.name || d.id)}</option>`).join('');
+const inp = (path, v, ph = '', type = 'text', extra = '') => `<input data-p="${path}" type="${type}" value="${esc(v ?? '')}" placeholder="${esc(ph)}" ${extra}>`;
+
+function preview() { $('pv').contentWindow?.postMessage({ type: 'pt-draft', topology: T }, location.origin); }
+function changed() { $('save').disabled = !dirty() || !editable; $('reset').disabled = !dirty(); preview(); }
+
+function draw() {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  let h = '';
+  if (tab === 'dev') {
+    h += `<label class="full" style="margin-bottom:12px">Titel${inp('title', T.title, 'Mein Homelab')}</label>`;
+    h += `<button class="e-b add" data-act="addDev">+ Gerät hinzufügen</button>`;
+    T.devices.forEach((d, i) => {
+      const p = `devices.${i}.`, hosts = T.devices.filter(x => x !== d && ['server', 'guest', 'vps', 'nas', 'generic'].includes(x.kind));
+      h += `<details class="card" data-id="${esc(d.id)}" ${open.has(d.id) ? 'open' : ''}><summary><span class="led"></span><b>${esc(d.name || d.id)}</b><span class="e-k">${esc(KINDS[d.kind] || d.kind)}</span></summary><div class="body">
+        <label>Name${inp(p + 'name', d.name, 'z. B. server-1')}</label>
+        <label>Typ<select data-p="${p}kind">${opt(KINDS, d.kind)}</select></label>
+        ${['guest', 'ct'].includes(d.kind) ? `<label class="full">Läuft auf<select data-p="${p}host"><option value="">–</option>${hosts.map(x => `<option value="${esc(x.id)}" ${x.id === d.host ? 'selected' : ''}>${esc(x.name || x.id)}</option>`).join('')}</select></label>` : ''}
+        ${d.kind === 'switch' ? `<label>Ports (max. 28)${inp(p + 'ports', d.ports ?? 24, '24', 'number', 'min="1" max="28" data-n')}</label>` : ''}
+        ${d.kind === 'nas' ? `<label>Platten (0–4)${inp(p + 'disks', d.disks ?? 4, '4', 'number', 'min="0" max="4" data-n')}</label>` : ''}
+        ${d.kind === 'guest' ? `<label class="e-row" style="grid-template-columns:auto 1fr;display:flex;gap:8px;align-items:center"><input type="checkbox" data-p="${p}lxc" ${d.lxc ? 'checked' : ''} style="width:auto;height:auto"> LXC statt VM</label>` : ''}
+        <label>IP${inp(p + 'ip', d.ip, '192.168.1.10')}</label>
+        <label>Untertitel${inp(p + 'sub', d.sub, 'leer = automatisch')}</label>
+        <label>Aufdruck${inp(p + 'print', d.print, 'z. B. PROXMOX')}</label>
+        <label class="full">Link beim Öffnen${inp(p + 'href', d.href, 'https://…')}</label>
+        <label class="full">Erreichbarkeit prüfen${inp(p + 'check', d.check, 'https://… oder tcp://192.168.1.10:22')}</label>
+        <label class="full">Infos (eine pro Zeile: Name: Wert)<textarea data-p="${p}info" data-info rows="3" placeholder="Standort: Keller">${esc(Object.entries(d.info || {}).map(([k, v]) => k + ': ' + v).join('\n'))}</textarea></label>
+        <details class="full"><summary class="t3" style="font-size:12px;cursor:pointer">Position (leer = automatisch)</summary><div class="e-row" style="margin-top:8px">
+          <label>x${inp(p + 'x', d.x, 'auto', 'number', 'data-n')}</label><label>y${inp(p + 'y', d.y, 'auto', 'number', 'data-n')}</label><label>z (Höhe)${inp(p + 'z', d.z, 'auto', 'number', 'data-n')}</label></div></details>
+        <div class="full e-row" style="justify-content:space-between"><span class="t3 mono" style="font-size:11px">id: ${esc(d.id)}</span><button class="e-b del" data-act="delDev" data-i="${i}">Entfernen</button></div>
+      </div></details>`;
+    });
+  } else if (tab === 'lnk') {
+    h += `<p class="e-hint">Hängt <b>„Von“</b> an einem Switch, gib den Port an – dann läuft das Kabel am echten Port raus. Traffic kommt über <code>POST /api/metrics</code> (siehe README), sonst Demo-Werte.</p>`;
+    h += `<button class="e-b add" data-act="addLnk" ${T.devices.length < 2 ? 'disabled' : ''}>+ Verbindung hinzufügen</button>`;
+    T.links.forEach((l, i) => {
+      const p = `links.${i}.`, sw = T.devices.find(d => d.id === l.from)?.kind === 'switch';
+      h += `<div class="card"><div class="body" style="padding-top:12px">
+        <div class="full lk"><select data-p="${p}from" aria-label="Von">${devOpt(l.from)}</select><span>→</span><select data-p="${p}to" aria-label="Nach">${devOpt(l.to)}</select></div>
+        <label>Art<select data-p="${p}type">${opt(TYPES, l.type || 'lan')}</select></label>
+        ${sw ? `<label>Port${inp(p + 'port', l.port, '–', 'number', 'min="1" max="28" data-n')}</label>` : '<span></span>'}
+        <label>Beschriftung${inp(p + 'label', l.label, 'optional')}</label>
+        <label>Metrik-ID${inp(p + 'id', l.id, `${l.from}--${l.to}`)}</label>
+        <div class="full e-row" style="justify-content:flex-end"><button class="e-b del" data-act="delLnk" data-i="${i}">Entfernen</button></div>
+      </div></div>`;
+    });
+  } else {
+    h += `<p class="e-hint">Komplette Topologie als JSON – zum Sichern, Teilen oder Einfügen.</p><textarea id="json" rows="24" spellcheck="false">${esc(JSON.stringify(T, null, 2))}</textarea>
+      <div class="e-row" style="margin-top:8px"><button class="e-b" data-act="applyJson">Übernehmen</button><button class="e-b" data-act="copyJson">Kopieren</button></div>`;
+  }
+  $('body').innerHTML = h;
+  changed();
+}
+
+function setPath(path, el) {
+  const keys = path.split('.'), last = keys.pop(); let o = T; for (const k of keys) o = o[k];
+  let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (el.dataset.info != null) { v = Object.fromEntries(el.value.split('\n').map(l => l.split(/:\s*/)).filter(a => a[0]?.trim()).map(([k, ...r]) => [k.trim(), r.join(': ').trim()])); if (!Object.keys(v).length) v = undefined; }
+  else if (el.dataset.n != null) v = el.value === '' ? undefined : Number(el.value);
+  else if (v === '' || v === false) v = undefined;
+  if (v === undefined) delete o[last]; else o[last] = v;
+}
+$('body').addEventListener('input', e => {
+  const el = e.target; if (!el.dataset.p) return;
+  setPath(el.dataset.p, el);
+  if (/kind$|from$/.test(el.dataset.p)) return draw();   // andere Felder je nach Typ
+  const card = el.closest('details.card');
+  if (card && /name$/.test(el.dataset.p)) {
+    card.querySelector('summary b').textContent = el.value || card.dataset.id;
+    const d = T.devices[+el.dataset.p.split('.')[1]];
+    if (!JSON.parse(saved).devices.some(x => x.id === d.id)) {   // neues Gerät: id folgt dem Namen (inkl. Verweise)
+      const old = d.id; d.id = ''; d.id = uniq(slug(el.value));
+      T.links.forEach(l => { if (l.from === old) l.from = d.id; if (l.to === old) l.to = d.id; });
+      T.devices.forEach(x => { if (x.host === old) x.host = d.id; });
+      if (open.delete(old)) open.add(d.id); card.dataset.id = d.id; card.querySelector('.body .t3.mono').textContent = 'id: ' + d.id;
+    }
+  }
+  changed();
+});
+$('body').addEventListener('toggle', e => { const c = e.target; if (c.matches?.('details.card')) c.open ? open.add(c.dataset.id) : open.delete(c.dataset.id); }, true);
+$('body').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const i = +b.dataset.i;
+  if (b.dataset.act === 'addDev') { const id = uniq('neues-geraet'); T.devices.push({ id, kind: 'server', name: id }); open.add(id); draw(); const c = document.querySelector(`details.card[data-id="${id}"]`); c?.scrollIntoView({ block: 'center', behavior: 'smooth' }); c?.querySelector('input')?.select(); return; }
+  if (b.dataset.act === 'delDev') { const d = T.devices[i], n = T.links.filter(l => l.from === d.id || l.to === d.id).length;
+    if (!confirm(`„${d.name || d.id}“ entfernen${n ? ` (und ${n} Verbindung${n > 1 ? 'en' : ''})` : ''}?`)) return;
+    T.devices.splice(i, 1); T.links = T.links.filter(l => l.from !== d.id && l.to !== d.id); T.devices.forEach(x => { if (x.host === d.id) delete x.host; }); }
+  if (b.dataset.act === 'addLnk') T.links.push({ from: T.devices[0].id, to: T.devices[1].id, type: 'lan' });
+  if (b.dataset.act === 'delLnk') T.links.splice(i, 1);
+  if (b.dataset.act === 'applyJson') { try { const j = JSON.parse($('json').value); if (!Array.isArray(j.devices) || !Array.isArray(j.links)) throw new Error('devices und links fehlen'); T = j; msg('JSON übernommen – noch nicht gespeichert'); } catch (err) { return msg('JSON-Fehler: ' + err.message, 'err'); } }
+  if (b.dataset.act === 'copyJson') { navigator.clipboard?.writeText($('json').value).then(() => msg('Kopiert', 'ok')); return; }
+  draw();
+});
+document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; draw(); } });
+
+$('save').onclick = async () => {
+  try { localStorage.setItem('pt.token', $('tok').value); } catch {}
+  $('save').disabled = true; msg('Speichere …');
+  try {
+    const r = await fetch('/api/topology', { method: 'PUT', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + $('tok').value }, body: JSON.stringify(T) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    saved = JSON.stringify(T); msg('Gespeichert ✓', 'ok');
+  } catch (err) { msg(err.message, 'err'); }
+  changed();
+};
+$('reset').onclick = () => { if (confirm('Ungespeicherte Änderungen verwerfen?')) { T = JSON.parse(saved); draw(); msg(''); } };
+addEventListener('beforeunload', e => { if (dirty()) e.preventDefault(); });
+$('pv').addEventListener('load', preview);
+
+(async () => {
+  try { $('tok').value = localStorage.getItem('pt.token') || ''; } catch {}
+  const th = document.documentElement.dataset.theme; if (th) $('pv').src = '/?embed&preview&theme=' + th;
+  const s = await (await fetch('/api/state', { cache: 'no-store' })).json();
+  T = s.topology; saved = JSON.stringify(T); editable = s.editable; $('ttl').textContent = T.title || 'Homelab';
+  if (!editable) msg('Nur lesen: auf dem Server ist kein ADMIN_TOKEN gesetzt', 'err');
+  draw();
+})();
+</script>
+</body>
+</html>

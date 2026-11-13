@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Packet Tracer</title>
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/ui.css">
+<script src="/lib.js"></script>
+<script>if (/[?&]embed\b/.test(location.search) || navigator.standalone || matchMedia('(display-mode: standalone)').matches) document.documentElement.classList.add('bare');</script>
+<style>
+  :root { --g-edge: rgba(255,255,255,.30); --g-hid: rgba(255,255,255,.10); --g-sheen: #fff; --g-sheen-a: .13; --g-shadow: rgba(0,0,0,.55); --floor: rgba(255,255,255,.045); --print: rgba(255,255,255,.55); }
+  :root[data-theme="light"] { --g-edge: rgba(9,9,11,.32); --g-hid: rgba(9,9,11,.12); --g-sheen: #fff; --g-sheen-a: .55; --g-shadow: rgba(9,9,11,.16); --floor: rgba(9,9,11,.06); --print: rgba(9,9,11,.5); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --g-edge: rgba(9,9,11,.32); --g-hid: rgba(9,9,11,.12); --g-sheen: #fff; --g-sheen-a: .55; --g-shadow: rgba(9,9,11,.16); --floor: rgba(9,9,11,.06); --print: rgba(9,9,11,.5); } }
+
+  .stage { position: relative; height: calc(100dvh - 52px); overflow: hidden; touch-action: none; cursor: grab;
+    background: radial-gradient(120% 90% at 50% 35%, color-mix(in srgb, var(--c2) 7%, var(--bg)) 0%, var(--bg) 60%); }
+  .bare .rail, .bare .topbar { display: none; }
+    .bare .stage { height: 100dvh; }
+  .stage.drag { cursor: grabbing; }
+  svg#g { width: 100%; height: 100%; display: block; transform-origin: 0 0; }
+  svg#g.moving { will-change: transform; }
+  .ctl { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 2; }
+  .ctl button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--panel) 94%, transparent); color: var(--text-2); cursor: pointer; font: 16px var(--mono); }
+  .ctl button:hover { color: var(--text); background: var(--hover); }
+  .legend { position: absolute; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 2; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px;
+    background: color-mix(in srgb, var(--panel) 92%, transparent); font: 11px var(--mono); color: var(--text-3); max-width: calc(100% - 100px); }
+  .legend i { display: inline-block; width: 18px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+  .hud { position: absolute; left: 16px; top: calc(14px + env(safe-area-inset-top)); right: 16px; z-index: 2; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+  .hud span { font: 11px var(--mono); color: var(--text-3); padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 90%, transparent); }
+  .hud b { color: var(--text); font-weight: 500; }
+  .tip { position: absolute; z-index: 3; pointer-events: none; min-width: 200px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-2);
+    background: color-mix(in srgb, var(--panel) 86%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.45); display: none; }
+  .tip .t { font-weight: 600; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+  .tip .r { display: flex; justify-content: space-between; gap: 16px; font: 11.5px/1.6 var(--mono); color: var(--text-3); }
+  .tip .r b { color: var(--text); font-weight: 500; }
+
+  .node, .port { cursor: pointer; }
+  .node.off .inner { opacity: .25; }
+  .node.off { opacity: .6; }
+  .node:hover .fe, .node:focus .fe { stroke: var(--text); }
+  .node.new { animation: born 1.4s ease-out; }
+  @keyframes born { 0% { opacity: 0; transform: translateY(-30px); } 60% { opacity: 1; } }
+  .fe { stroke: var(--g-edge); stroke-width: 1; stroke-linejoin: round; }
+  .he { stroke: var(--g-hid); stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
+  .print { font: 600 9px var(--mono); fill: var(--print); letter-spacing: .06em; }
+  .lbl { font: 600 12.5px var(--sans); fill: var(--text); letter-spacing: -.01em; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+  .sub { font: 10.5px var(--mono); fill: var(--text-3); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+  .plbl { font: 9.5px var(--mono); fill: var(--text-2); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+  .port:hover .pf { stroke: var(--text); stroke-width: 1.2; }
+  .wire { fill: none; stroke: var(--line-3); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+  .wire.v { stroke-dasharray: 4 4; }
+  .flow { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: .1 19.9; animation: flow linear infinite; }
+  .flow.rev { animation-direction: reverse; }
+  .flow.tun { stroke-dasharray: 8 12; }
+  @keyframes flow { to { stroke-dashoffset: -120; } }
+  .blink { animation: blink 2.4s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .chips { position: absolute; left: 0; right: 0; top: calc(50px + env(safe-area-inset-top)); z-index: 2; display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips button { flex: none; height: 34px; padding: 0 12px; display: flex; align-items: center; gap: 7px; border-radius: 999px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--panel) 72%, transparent);
+    color: var(--text-2); font: 500 12.5px var(--sans); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+  .chips button i { width: 6px; height: 6px; border-radius: 50%; }
+  .chips button:hover { color: var(--text); }
+  .chips button.on { color: var(--bg); background: var(--text); border-color: var(--text); }
+  /* Auswahl */
+  .node, .edge, .tag, .plbl { transition: opacity .25s ease; }
+  .dim { opacity: .14; }
+  .node.dim .inner { opacity: .4; }
+  .edge.hot .wire { stroke-width: 2; }
+  .ring { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; animation: ring 1.6s linear infinite; }
+  @keyframes ring { to { stroke-dashoffset: -20; } }
+  .tag rect { fill: color-mix(in srgb, var(--panel) 78%, transparent); stroke: var(--line-2); stroke-width: 1; }
+  .tag.sel rect { stroke: var(--accent); }
+  .tag .lbl, .tag .sub { stroke: none; }
+  /* Detail-Blatt */
+  .sheet { position: absolute; z-index: 4; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-height: 62%; overflow: auto; overscroll-behavior: contain; padding: 0 16px 16px;
+    border-radius: 22px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--panel) 84%, transparent); backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%);
+    box-shadow: 0 -10px 60px rgba(0,0,0,.45); transform: translateY(calc(100% + 30px)); transition: transform .32s cubic-bezier(.2,.9,.25,1); touch-action: pan-y; }
+  .sheet.open { transform: none; }
+  .sheet .grab { position: sticky; top: 0; height: 22px; margin: 0 -16px; display: grid; place-items: center; cursor: grab; touch-action: none; background: inherit; }
+  .sheet .grab::after { content: ''; width: 38px; height: 5px; border-radius: 3px; background: var(--line-3); }
+  .sh-h { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; touch-action: none; }
+  .sh-t { font: 600 18px var(--sans); letter-spacing: -.02em; }
+  .sh-s { font: 11.5px var(--mono); color: var(--text-3); margin-top: 2px; }
+  .sh-h .x { margin-left: auto; width: 36px; height: 36px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); color: var(--text-2); cursor: pointer; font-size: 13px; }
+  .kvs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .kv { padding: 9px 11px; border-radius: 12px; background: color-mix(in srgb, var(--raised) 70%, transparent); border: 1px solid var(--line); min-width: 0; }
+  .kv span { display: block; font: 10.5px var(--mono); color: var(--text-4); text-transform: uppercase; letter-spacing: .06em; }
+  .kv b { display: block; font: 500 13px var(--mono); color: var(--text); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pdet { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0 4px; }
+  .sec { font: 500 10.5px var(--mono); color: var(--text-4); text-transform: uppercase; letter-spacing: .08em; margin: 16px 2px 7px; }
+  .list { display: grid; gap: 4px; margin-bottom: 4px; }
+  .li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 60%, transparent); color: var(--text); cursor: pointer; text-align: left; font: 13.5px var(--sans); }
+  .li:hover { background: var(--hover); }
+  .li .pn { min-width: 26px; height: 22px; padding: 0 5px; border-radius: 6px; display: grid; place-items: center; font: 600 11px var(--mono); background: var(--inset); color: var(--text-3); }
+  .li .pn.lan { background: color-mix(in srgb, var(--c2) 22%, transparent); color: var(--c2); }
+  .li .pn.sto { background: color-mix(in srgb, var(--c3) 22%, transparent); color: var(--c3); }
+  .li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .li .rt { font: 11.5px var(--mono); color: var(--text-3); }
+  .pgrid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; padding: 10px; border-radius: 14px; background: var(--inset); border: 1px solid var(--line); margin-bottom: 4px; }
+  .pgrid button, .pgrid i { aspect-ratio: 1; min-height: 20px; border-radius: 5px; border: 1px solid var(--line-2); background: transparent; color: var(--text-4); font: 600 8.5px var(--mono); padding: 0; cursor: pointer; }
+  .pgrid button.lan { background: color-mix(in srgb, var(--c2) 30%, transparent); border-color: var(--c2); color: var(--text); box-shadow: 0 0 10px color-mix(in srgb, var(--c2) 40%, transparent); }
+  .pgrid button.sto { background: color-mix(in srgb, var(--c3) 30%, transparent); border-color: var(--c3); color: var(--text); box-shadow: 0 0 10px color-mix(in srgb, var(--c3) 40%, transparent); }
+  .pgrid button.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .pgrid button:nth-child(13), .pgrid button:nth-child(27) { margin-left: 4px; }
+  .go { width: 100%; height: 48px; margin-top: 14px; border-radius: 14px; border: 0; background: var(--text); color: var(--bg); font: 600 15px var(--sans); cursor: pointer; }
+  @media (min-width: 900px) {
+    .sheet { left: auto; right: 76px; top: calc(96px + env(safe-area-inset-top)); bottom: 16px; width: 360px; max-height: none; transform: translateX(calc(100% + 100px)); box-shadow: 0 20px 70px rgba(0,0,0,.45); }
+    .sheet .grab { display: none; } .sheet { padding-top: 16px; }
+  }
+  @media (max-width: 899px) { .stage.sheeted .ctl, .stage.sheeted .legend { opacity: 0; pointer-events: none; } }
+  @media (max-width: 640px) { .legend { display: none; } .hud span:nth-child(n+3) { display: none; } }
+    #g.moving .flow, #g.moving .blink, #g.moving .ring { animation-play-state: paused; }
+  #g { shape-rendering: geometricPrecision; text-rendering: optimizeSpeed; }
+  @media (prefers-reduced-motion: reduce) { .flow, .blink, .node.new { animation: none; } }
+</style>
+<style>.bare .topbar { display: none; } .topbar a.btn { text-decoration: none; }</style>
+</head>
+<body>
+  <div class="main">
+    <header class="topbar"><div class="crumb"><b id="ttl">Homelab</b><span class="t4">/</span><span class="t3">Packet Tracer</span></div><div class="sp"></div>
+      <span class="mono t3 hide-m" id="upd" style="font-size:11.5px"></span>
+      <a class="btn" href="/edit">Bearbeiten</a>
+      <button class="btn" id="theme" aria-label="Farbschema wechseln"></button></header>
+    <div class="stage" id="stage">
+      <div class="hud" id="hud"></div>
+      <div class="chips" id="chips" aria-label="Schnellwahl"></div>
+      <svg id="g" role="img" aria-label="Live-Topologie">
+        <defs>
+          <linearGradient id="sheenT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--g-sheen)" stop-opacity="var(--g-sheen-a)"/><stop offset=".55" stop-color="var(--g-sheen)" stop-opacity=".02"/><stop offset="1" stop-color="var(--g-sheen)" stop-opacity=".06"/></linearGradient>
+          <linearGradient id="sheenS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--g-sheen)" stop-opacity=".07"/><stop offset="1" stop-color="var(--g-sheen)" stop-opacity="0"/></linearGradient>
+          <radialGradient id="flg" gradientUnits="userSpaceOnUse" cx="0" cy="60" r="1250"><stop offset=".3" stop-color="var(--floor)"/><stop offset="1" stop-color="var(--floor)" stop-opacity="0"/></radialGradient>
+          <radialGradient id="shg"><stop offset="0" stop-color="var(--g-shadow)"/><stop offset=".55" stop-color="var(--g-shadow)" stop-opacity=".6"/><stop offset="1" stop-color="var(--g-shadow)" stop-opacity="0"/></radialGradient>
+        </defs>
+        <g id="floor"></g><g id="scene"></g><g id="labels"></g>
+      </svg>
+      <div class="legend"><span><i style="background:var(--c2)"></i>LAN</span><span><i style="background:var(--c3)"></i>Storage</span><span><i style="background:var(--accent)"></i>Internet / Tunnel</span><span><i style="background:var(--ok)"></i>VM / Container</span><span>Tempo = Datenrate</span></div>
+      <div class="ctl"><button id="zin" aria-label="Vergrößern">+</button><button id="zout" aria-label="Verkleinern">−</button><button id="fit" aria-label="Alles zeigen">⤢</button></div>
+      <div class="tip" id="tip"></div>
+      <aside class="sheet" id="sheet" aria-label="Details"><div class="grab"></div><div id="sheetc"></div></aside>
+    </div>
+  </div>
+<script>
+// ── Isometrie: Welt (x rechts-vorn, y links-vorn, z hoch) → Bildschirm ─────
+const C = Math.cos(Math.PI / 6), S = .5;
+const P = (x, y, z = 0) => [(x - y) * C, (x + y) * S - z];
+const pt = (x, y, z) => P(x, y, z).map(v => v.toFixed(1)).join(',');
+const poly = (pts, attrs) => `<polygon points="${pts.map(p => pt(...p)).join(' ')}" ${attrs}/>`;
+const line3 = (pts, attrs) => `<polyline points="${pts.map(p => pt(...p)).join(' ')}" ${attrs}/>`;
+const pathOf = pts => 'M' + pts.map(p => pt(...p)).join(' L');
+const tint = (c, a) => `color-mix(in srgb, ${c} ${a}%, transparent)`;
+const LEDC = st => st === 'ok' ? 'var(--ok)' : st === 'bad' ? 'var(--bad)' : st === 'warn' ? 'var(--warn)' : 'var(--off)';
+
+// Glaskasten: Rückseiten + versteckte Kanten, dann Innenleben, dann transparente Front mit Glanz
+function glass(b, col, inner = '', front = '') {
+  const { x, y, z = 0, w, d, h } = b;
+  const c = (u, v, t) => [x + u, y + v, z + t];
+  const shadow = poly([c(-6, -6, 0).slice(0, 2).concat(0), [x + w + 10, y - 6, 0], [x + w + 10, y + d + 14, 0], [x - 6, y + d + 14, 0]], `fill="url(#shg)"`);
+  const back = poly([c(0, 0, 0), c(w, 0, 0), c(w, d, 0), c(0, d, 0)], `fill="${tint(col, 6)}"`)
+    + poly([c(0, 0, 0), c(w, 0, 0), c(w, 0, h), c(0, 0, h)], `fill="${tint(col, 4)}"`)
+    + poly([c(0, 0, 0), c(0, d, 0), c(0, d, h), c(0, 0, h)], `fill="${tint(col, 4)}"`)
+    + line3([c(w, 0, 0), c(0, 0, 0), c(0, d, 0)], 'class="he"') + line3([c(0, 0, 0), c(0, 0, h)], 'class="he"');
+  const fl = [c(0, d, 0), c(w, d, 0), c(w, d, h), c(0, d, h)], fr = [c(w, 0, 0), c(w, d, 0), c(w, d, h), c(w, 0, h)], tp = [c(0, 0, h), c(w, 0, h), c(w, d, h), c(0, d, h)];
+  const faces = poly(fl, `fill="${tint(col, 9)}"`) + poly(fl, 'fill="url(#sheenS)" class="fe"')
+    + poly(fr, `fill="${tint(col, 6)}"`) + poly(fr, 'fill="url(#sheenS)" class="fe"')
+    + poly(tp, `fill="${tint(col, 7)}"`) + poly(tp, 'fill="url(#sheenT)" class="fe"')
+    + line3([c(0, d, h), c(w, d, h), c(w, 0, h)], `stroke="${tint(col, 70)}" stroke-width="1.3" fill="none"`);
+  return (z > 0 ? '' : shadow) + back + `<g class="inner">${inner}</g>` + faces + front;
+}
+// Rechteck/Text auf der Front (Ebene y = y+d): u entlang x, v nach oben
+const onFront = (b, u, v, du, dv, attrs) => poly([[b.x + u, b.y + b.d, (b.z || 0) + v], [b.x + u + du, b.y + b.d, (b.z || 0) + v], [b.x + u + du, b.y + b.d, (b.z || 0) + v + dv], [b.x + u, b.y + b.d, (b.z || 0) + v + dv]], attrs);
+const frontText = (b, u, v, txt, cls = 'print') => { const [sx, sy] = P(b.x + u, b.y + b.d, (b.z || 0) + v); return `<text class="${cls}" transform="matrix(${C},${S},0,1,${sx.toFixed(1)},${sy.toFixed(1)})">${esc(txt)}</text>`; };
+const topText = (b, u, v, txt, cls = 'print') => { const [sx, sy] = P(b.x + u, b.y + v, (b.z || 0) + b.h); return `<text class="${cls}" transform="matrix(${C},${S},${-C},${S},${sx.toFixed(1)},${sy.toFixed(1)})">${esc(txt)}</text>`; };
+// kleiner massiver Block (Innenleben)
+function block(x, y, z, w, d, h, col, a = 40) {
+  return poly([[x, y + d, z], [x + w, y + d, z], [x + w, y + d, z + h], [x, y + d, z + h]], `fill="${tint(col, a * .7)}"`)
+    + poly([[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]], `fill="${tint(col, a * .5)}"`)
+    + poly([[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]], `fill="${tint(col, a)}" stroke="${tint(col, 80)}" stroke-width=".6"`);
+}
+
+// ── Gerätezeichnungen ─────────────────────────────────────────────────────
+const DRAW = {
+  switch(n) {
+    const b = n.box, col = 'var(--c2)';
+    let inner = poly([[b.x + 8, b.y + 8, 3], [b.x + b.w - 8, b.y + 8, 3], [b.x + b.w - 8, b.y + b.d - 6, 3], [b.x + 8, b.y + b.d - 6, 3]], `fill="${tint('var(--ok)', 7)}" stroke="${tint('var(--ok)', 25)}" stroke-width=".6"`);
+    inner += block(b.x + 150, b.y + 18, 3, 40, 30, 5, 'var(--text)', 22) + block(b.x + 40, b.y + 14, 3, 70, 26, 10, 'var(--text)', 14) + block(b.x + b.w - 70, b.y + 12, 3, 46, 40, 12, 'var(--text)', 12);
+    let front = '';
+    (n.ports || []).forEach(p => {
+      const g = n.portGeo[p.num]; if (!g) return;
+      const up = p.status === 'connected', c = up ? (p.vlan === '50' ? 'var(--c3)' : 'var(--c2)') : 'var(--line-3)';
+      front += `<g class="port" data-port="${p.num}">${onFront(b, g.u, g.v, g.du, g.dv, `class="pf" fill="${up ? tint(c, 55) : 'var(--inset)'}" stroke="${up ? c : 'var(--line-2)'}" stroke-width=".7"${up ? '' : ''}`)}`
+        + (up ? onFront(b, g.u + g.du / 2 - 1.2, g.v + g.dv + 1, 2.4, 1.6, `fill="var(--ok)" class="${p.rx + p.tx > 500 ? 'blink' : ''}"`) : '') + '</g>';
+    });
+    front += frontText(b, 8, 4.5, n.print || 'SWITCH');
+    return glass(b, col, inner, front);
+  },
+  server(n) {
+    const b = n.box, col = 'var(--text)', on = n.st === 'ok', L = n.load || 0, M = n.mem || 0;
+    let inner = poly([[b.x + 6, b.y + 6, 3], [b.x + b.w - 6, b.y + 6, 3], [b.x + b.w - 6, b.y + b.d - 6, 3], [b.x + 6, b.y + b.d - 6, 3]], `fill="${tint('var(--ok)', 6)}" stroke="${tint('var(--ok)', 22)}" stroke-width=".6"`);
+    const cpuC = L > .8 ? 'var(--bad)' : L > .5 ? 'var(--warn)' : 'var(--accent)';
+    inner += block(b.x + 30, b.y + 22, 3, 26, 26, 7, on ? cpuC : 'var(--off)', on ? 30 + L * 60 : 15);
+    for (let i = 0; i < 8; i++) inner += block(b.x + 66 + i * 7, b.y + 16, 3, 3, 40, 12, i < Math.round(M * 8) && on ? 'var(--c2)' : 'var(--off)', i < Math.round(M * 8) && on ? 55 : 18);
+    for (let i = 0; i < 3; i++) inner += block(b.x + 20 + i * 18, b.y + 66, 3, 12, 22, 14, 'var(--text)', 10);   // Lüfter
+    let front = '';
+    for (let i = 0; i < 4; i++) front += onFront(b, b.w - 78 + i * 18, 4, 15, b.h - 12, `fill="${tint('var(--text)', 6)}" stroke="var(--g-edge)" stroke-width=".6"`) + onFront(b, b.w - 75 + i * 18, b.h - 7, 3, 1.5, `fill="${on ? 'var(--ok)' : 'var(--off)'}"`);
+    front += onFront(b, 10, b.h - 9, 4, 4, `fill="${LEDC(n.st)}"${on ? ' class="blink"' : ''}`) + frontText(b, 18, b.h - 9.5, n.print || '');
+    return glass(b, col, inner, front);
+  },
+  nas(n) {
+    const b = n.box, col = 'var(--accent)';
+    let inner = '', front = '';
+    for (let i = 0; i < 4; i++) {
+      const dk = (n.disks || [])[i], u = 10 + i * ((b.w - 20) / 4), du = (b.w - 20) / 4 - 6;
+      if (dk) inner += block(b.x + u, b.y + 14, 3, du, b.d - 30, b.h - 9, dk.health === false ? 'var(--bad)' : 'var(--accent)', 26 + Math.min(30, (dk.temperature || 30) - 20));
+      else inner += poly([[b.x + u, b.y + 14, 3], [b.x + u + du, b.y + 14, 3], [b.x + u + du, b.y + b.d - 16, 3], [b.x + u, b.y + b.d - 16, 3]], 'fill="none" class="he"');
+      front += onFront(b, u, 3, du, b.h - 7, `fill="${dk ? tint('var(--accent)', 14) : 'var(--inset)'}" stroke="${dk ? tint('var(--accent)', 60) : 'var(--line-2)'}" stroke-width=".7"${dk ? '' : ' stroke-dasharray="2 2"'}`)
+        + onFront(b, u + 3, b.h - 7, 3, 1.6, `fill="${dk ? (dk.health === false ? 'var(--bad)' : 'var(--ok)') : 'var(--off)'}"${dk ? ' class="blink"' : ''}`);
+    }
+    return glass(b, col, inner, front + topText(b, 10, 14, n.print || ''));
+  },
+  router(n) {
+    const b = n.box, col = 'var(--c2)';
+    let front = '';
+    for (let i = 0; i < 5; i++) front += onFront(b, 12 + i * 9, b.h / 2 - 1, 4, 2.4, `fill="${i < 4 ? 'var(--ok)' : 'var(--off)'}"${i === 2 ? ' class="blink"' : ''}`);
+    const inner = block(b.x + 20, b.y + 18, 2, 30, 20, 4, 'var(--text)', 14);
+    return glass(b, col, inner, front + topText(b, 8, 14, n.print || ''));
+  },
+  guest(n) {
+    const b = n.box, col = n.lxc ? 'var(--c3)' : 'var(--ok)', on = n.st === 'ok', k = 14;
+    let inner;
+    if (n.lxc) { inner = ''; for (let i = 0; i < 3; i++) inner += block(b.x + k, b.y + k, 4 + i * 9, b.w - 2 * k, b.d - 2 * k, 6, on ? col : 'var(--off)', on ? 45 : 15); }
+    else inner = block(b.x + k, b.y + k, 6, b.w - 2 * k, b.d - 2 * k, b.h - 16, on ? col : 'var(--off)', on ? 30 + (n.load || 0) * 60 : 12);
+    return glass(b, col, inner, onFront(b, 6, b.h - 9, 3.5, 3.5, `fill="${LEDC(n.st)}"${on ? '' : ''}`));
+  },
+  ct(n) {
+    const b = n.box, col = 'var(--c3)', on = n.st === 'ok';
+    return glass(b, col, block(b.x + 9, b.y + 9, 5, b.w - 18, b.d - 18, b.h - 12, on ? col : 'var(--bad)', on ? 35 + Math.min(50, (n.load || 0) * 400) : 30),
+      onFront(b, 4, b.h - 7, 3, 3, `fill="${LEDC(n.st)}"${on ? '' : ''}`));
+  },
+  vps(n) {
+    const b = n.box, col = 'var(--accent)';
+    let inner = ''; for (let i = 0; i < 3; i++) inner += block(b.x + 12 + i * 26, b.y + 14, b.z + 4, 18, b.d - 28, b.h - 10, n.st === 'ok' ? 'var(--accent)' : 'var(--warn)', 28);
+    const [fx, fy] = P(b.x + b.w / 2, b.y + b.d / 2, 0), [tx, ty] = P(b.x + b.w / 2, b.y + b.d / 2, b.z);
+    return `<line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" class="he"/>` + `<ellipse cx="${fx}" cy="${fy}" rx="${b.w * .5}" ry="${b.w * .25}" fill="url(#shg)" opacity=".5"/>` + glass(b, col, inner, topText(b, 10, 16, n.print || 'VPS'));
+  },
+  cloud(n) {   // Cloudflare: schwebende Glasplatte mit Wolke
+    const b = n.box, col = 'var(--accent)';
+    const [cx, cy] = P(b.x + b.w / 2, b.y + b.d / 2, b.z + b.h + 14);
+    const cloud = `<path transform="translate(${cx - 20},${cy - 12})" d="M10 22a8 8 0 0 1 1-16 11 11 0 0 1 20 3 7 7 0 0 1 1 13z" fill="${tint('var(--accent)', 30)}" stroke="var(--accent)" stroke-width="1.2"/>`;
+    const [fx, fy] = P(b.x + b.w / 2, b.y + b.d / 2, 0), [tx, ty] = P(b.x + b.w / 2, b.y + b.d / 2, b.z);
+    return `<line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" class="he"/>` + glass(b, col, '', cloud);
+  },
+  globe(n) {
+    const [cx, cy] = P(n.box.x, n.box.y, n.box.z), r = 34;
+    let s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${tint('var(--c2)', 8)}" stroke="var(--g-edge)"/>`;
+    for (const k of [.35, .75]) s += `<ellipse cx="${cx}" cy="${cy}" rx="${r * k}" ry="${r}" fill="none" stroke="${tint('var(--c2)', 45)}" stroke-width=".8"/>`;
+    for (const k of [-.5, 0, .5]) s += `<ellipse cx="${cx}" cy="${cy + r * k}" rx="${r * Math.sqrt(1 - k * k)}" ry="${r * .18}" fill="none" stroke="${tint('var(--c2)', 45)}" stroke-width=".8"/>`;
+    const [fx, fy] = P(n.box.x, n.box.y, 0);
+    return `<line x1="${fx}" y1="${fy}" x2="${cx}" y2="${cy + r}" class="he"/><ellipse cx="${fx}" cy="${fy}" rx="30" ry="15" fill="url(#shg)" opacity=".5"/>`
+      + `<radialGradient id="glb"><stop stop-color="var(--c2)" stop-opacity=".22"/><stop offset="1" stop-color="var(--c2)" stop-opacity="0"/></radialGradient><circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="url(#glb)"/>` + s;
+  },
+  generic(n) { return glass(n.box, 'var(--text-3)', '', onFront(n.box, 5, n.box.h - 8, 3, 3, `fill="${LEDC(n.st)}"`)); },
+};
+
+// ── Modell + Layout (aus topology.json) ─────────────────────────────────────
+function portGeo() {   // Switch-Front: 2 Reihen (ungerade oben), 6er-Blöcke, 4 SFP rechts
+  const G = {};
+  for (let n = 1; n <= 24; n++) { const col = (n - 1) >> 1, top = n % 2 === 1; G[n] = { u: 74 + col * 22 + Math.floor(col / 6) * 8, v: top ? 13.5 : 4, du: 15, dv: 7.5 }; }
+  for (let i = 0; i < 4; i++) G[25 + i] = { u: 352 + (i >> 1) * 20, v: i % 2 ? 4 : 13.5, du: 15, dv: 6 };
+  return G;
+}
+const PG = portGeo();
+const SIZE = { switch: [400, 72, 26], router: [96, 64, 16], server: [160, 112, 30], nas: [150, 100, 22], guest: [58, 58, 46], ct: [40, 40, 32],
+  vps: [96, 70, 26], cloud: [110, 70, 8], globe: [0, 0, 0], generic: [60, 60, 24] };
+const FLOAT = { globe: 120, cloud: 140, vps: 150 };
+const linkId = l => l.id || `${l.from}--${l.to}`;
+const pctTxt = v => Math.round((v || 0) * 100) + '%';
+
+function model(s) {
+  const T = s.topology, N = [], E = [], byId = {};
+  const cnt = {};   // laufende Nummer je Layout-Reihe
+  const nxt = k => (cnt[k] = (cnt[k] ?? -1) + 1);
+  // 1) Geräte + automatische Plätze (x/y/z aus dem Editor haben Vorrang)
+  const order = [...T.devices].sort((a, b) => (a.kind === 'switch' ? -1 : 0) - (b.kind === 'switch' ? -1 : 0));
+  for (const d of order) {
+    const [w, dd, h] = SIZE[d.kind], m = s.devices[d.id] || {};
+    let x, y, z = FLOAT[d.kind] || 0;
+    if (d.kind === 'switch') { const i = nxt('sw'); x = i * 460; y = 0; }
+    else if (d.kind === 'globe') { x = -330; y = 140 + nxt('globe') * 160; }
+    else if (d.kind === 'cloud') { x = -300 + nxt('cloud') * 150; y = -200; }
+    else if (d.kind === 'vps') { x = -60 + nxt('vps') * 140; y = -260; }
+    else if (d.kind === 'guest') { x = 10 + nxt('guest') * 110; y = 450; }
+    else if (d.kind === 'ct') { const i = nxt('ct'); x = -20 + (i % 6) * 84; y = 620 + Math.floor(i / 6) * 110; }
+    else { x = -120 + (cnt.frontX || 0); y = 250; cnt.frontX = (cnt.frontX || 0) + w + 50; }
+    if (d.x != null) x = d.x; if (d.y != null) y = d.y; if (d.z != null) z = d.z;
+    const st = m.status || 'ok', on = st === 'ok';
+    const info = [];
+    if (d.ip) info.push(['IP', d.ip]);
+    if (m.cpu != null) info.push(['CPU', pctTxt(m.cpu)]);
+    if (m.mem != null) info.push(['RAM', pctTxt(m.mem)]);
+    for (const [k, v] of Object.entries(d.info || {})) info.push([k, String(v)]);
+    const sub = m.sub || d.sub || (m.cpu != null && on ? `CPU ${pctTxt(m.cpu)}${m.mem != null ? ' · RAM ' + pctTxt(m.mem) : ''}` : st === 'bad' ? 'nicht erreichbar' : '');
+    const n = { id: d.id, kind: d.kind, label: d.name || d.id, sub, st, print: d.print || '', href: d.href, info, load: m.cpu, mem: m.mem, lxc: !!d.lxc,
+      box: { x, y, z, w, d: dd, h }, host: d.host };
+    if (d.kind === 'nas') n.disks = Array.from({ length: d.disks ?? 4 }, () => ({ health: on, temperature: 34 }));
+    if (d.kind === 'switch') { n.portGeo = PG; n.ports = Array.from({ length: Math.min(28, d.ports || 24) }, (_, i) => ({ num: i + 1, status: 'notconnect', vlan: '1', name: '', rx: 0, tx: 0, target: null })); }
+    N.push(n); byId[d.id] = n;
+  }
+  // 2) Verbindungen
+  const slots = {}, lanes = {}, kids = {};
+  for (const l of T.links) {
+    let a = byId[l.from], b = byId[l.to]; if (!a || !b) continue;
+    const r = s.links[linkId(l)] || {}, bps = (r.rx || 0) + (r.tx || 0), cls = l.type || 'lan', base = { bps, rev: (r.rx || 0) > (r.tx || 0), cls, f: a.id, t: b.id, label: l.label, lid: linkId(l) };
+    if (a.kind === 'switch' && l.port) {        // Kabel am echten Port, Bahnen auf dem Boden
+      const p = a.ports[l.port - 1]; if (!p) continue;
+      Object.assign(p, { status: 'connected', vlan: cls === 'sto' ? '50' : '1', name: b.label + (l.label ? ' · ' + l.label : ''), rx: r.rx || 0, tx: r.tx || 0, target: b.id, cls });
+      const g = PG[l.port], k = slots[b.id] = (slots[b.id] ?? -1) + 1, lane = lanes[a.id] = (lanes[a.id] ?? -1) + 1, A = a.box;
+      const px = A.x + g.u + g.du / 2, pz = g.v + g.dv / 2, ly = A.y + A.d + 24 + lane * 18, ax = b.box.x + 18 + k * 14;
+      const ty = b.box.y > A.y ? b.box.y : b.box.y + b.box.d;
+      E.push({ ...base, pts: [[px, A.y + A.d, pz], [px, A.y + A.d + 8, pz], [px, A.y + A.d + 8, 0], [px, ly, 0], [ax, ly, 0], [ax, ty, 0], [ax, ty, 5]], depth: A.y + A.d + 1, port: l.port });
+    } else if (a.box.z || b.box.z || cls === 'inet' || cls === 'tun') {   // „Luftlinie“ für Internet/Cloud/Tunnel
+      const top = n => n.kind === 'globe' ? P(n.box.x, n.box.y, n.box.z) : P(n.box.x + n.box.w / 2, n.box.y + n.box.d / 2, (n.box.z || 0) + n.box.h);
+      E.push({ ...base, air: true, a: top(a), b: top(b), arc: cls === 'tun' ? -80 : -30 });
+    } else {                                     // Host → Gast/Container oder sonstige Bodenleitung
+      const i = kids[a.id] = (kids[a.id] ?? -1) + 1, A = a.box, B = b.box;
+      const hx = A.x + A.w - 20 - i * 12 * (A.w > 100 ? 1 : .5), hy = A.y + A.d, gx = B.x + B.w / 2, ly = hy + 18 + i * 9;
+      E.push({ ...base, pts: [[hx, hy, 4], [hx, hy, 0], [hx, ly, 0], [gx, ly, 0], [gx, B.y, 0], [gx, B.y, 5]], virt: cls === 'vm' || cls === 'ct', depth: hy + 1 });
+    }
+  }
+  return { N, E };
+}
+
+// ── Rendern ────────────────────────────────────────────────────────────────
+const speed = bps => bps > 0 ? Math.max(.6, 7 - Math.log10(bps + 1) * 1.05) : 0;
+const width = bps => 2.2 + Math.min(2.6, Math.log10((bps || 0) + 1) / 2.2);
+const COL = { lan: 'var(--c2)', sto: 'var(--c3)', inet: 'var(--accent)', tun: 'var(--accent)', vm: 'var(--ok)', ct: 'var(--c3)' };
+const POOL = { switch: 'var(--c2)', server: 'var(--accent)', nas: 'var(--accent)', router: 'var(--c2)', guest: 'var(--ok)', ct: 'var(--c3)' };
+const KINDN = { switch: 'Switch', server: 'Server', nas: 'Speicher', router: 'Router', guest: 'Gast', ct: 'Container', vps: 'Cloud-Server', cloud: 'Edge', globe: 'Netz', generic: 'Gerät' };
+const known = new Set(); let first = true, M = null, ST = null, sel = null, selPort = null;
+const depthOf = n => n.box.x + n.box.w / 2 + n.box.y + n.box.d / 2 + (n.box.z ? -1000 : 0);
+const center = n => n.kind === 'globe' ? P(n.box.x, n.box.y, n.box.z) : P(n.box.x + n.box.w / 2, n.box.y + n.box.d / 2, (n.box.z || 0) + n.box.h / 2);
+function floor() {
+  let s = '';
+  for (let x = -480; x <= 760; x += 40) s += `<line x1="${P(x, -320)[0]}" y1="${P(x, -320)[1]}" x2="${P(x, 900)[0]}" y2="${P(x, 900)[1]}"/>`;
+  for (let y = -320; y <= 900; y += 40) s += `<line x1="${P(-480, y)[0]}" y1="${P(-480, y)[1]}" x2="${P(760, y)[0]}" y2="${P(760, y)[1]}"/>`;
+  return `<g stroke="url(#flg)" stroke-width="1">${s}</g>`;
+}
+// Tippfläche = Umriss des Kastens + Rand (größer als das Gerät → gut mit dem Finger zu treffen)
+function hit(n) {
+  if (n.kind === 'globe') { const [x, y] = P(n.box.x, n.box.y, n.box.z); return `<circle cx="${x}" cy="${y}" r="52" fill="#000" fill-opacity="0"/>`; }
+  const { x, y, z = 0, w, d, h } = n.box, m = 14;
+  return poly([[x - m, y - m, z + h + m], [x + w + m, y - m, z + h + m], [x + w + m, y - m, z - m], [x + w + m, y + d + m, z - m], [x - m, y + d + m, z - m], [x - m, y + d + m, z + h + m]], 'fill="#000" fill-opacity="0"');
+}
+function pool(n) {
+  if (!POOL[n.kind] || n.st !== 'ok' || n.box.z) return '';
+  const [x, y] = P(n.box.x + n.box.w / 2, n.box.y + n.box.d / 2, 0), r = (n.box.w + n.box.d) * .5;
+  const id = 'pl' + String(n.id).replace(/\W/g, '');
+  return `<radialGradient id="${id}"><stop stop-color="${POOL[n.kind]}" stop-opacity=".3"/><stop offset="1" stop-color="${POOL[n.kind]}" stop-opacity="0"/></radialGradient><ellipse cx="${x}" cy="${y + 4}" rx="${r * 1.25}" ry="${r * .62}" fill="url(#${id})"/>`;
+}
+function ring(n) {
+  if (n.kind === 'globe') { const [x, y] = P(n.box.x, n.box.y, n.box.z); return `<circle class="ring" cx="${x}" cy="${y}" r="46"/>`; }
+  const { x, y, z = 0, w, d } = n.box, m = 12;
+  return poly([[x - m, y - m, z], [x + w + m, y - m, z], [x + w + m, y + d + m, z], [x - m, y + d + m, z]], 'class="ring"');
+}
+function flowAttrs(e) {
+  const sp = e.cls === 'tun' ? 3 : speed(e.bps); if (!sp) return null;
+  return `class="flow ${e.rev ? 'rev' : ''} ${e.cls === 'tun' ? 'tun' : ''}" stroke="${COL[e.cls]}" stroke-width="${e.cls === 'tun' ? 2 : width(e.bps)}" style="animation-duration:${sp.toFixed(2)}s;animation-delay:-${((Date.now() / 1000) % sp).toFixed(2)}s"`;
+}
+const related = () => { const r = new Set(sel ? [sel] : []); if (sel) M.E.forEach(e => { if (e.f === sel) r.add(e.t); if (e.t === sel) r.add(e.f); }); return r; };
+function render(s) {
+  if (s) { ST = s; M = model(s); M.N.forEach(n => { n.fresh = !first && !known.has(n.id); known.add(n.id); }); }
+  if (!M) return;
+  if (sel && !M.N.some(n => n.id === sel)) sel = null;
+  const rel = related(), dimN = id => sel && !rel.has(id), dimE = e => sel && e.f !== sel && e.t !== sel;
+  const items = [];
+  M.N.forEach(n => items.push([depthOf(n), `<g class="node ${n.st === 'off' ? 'off' : ''} ${n.fresh ? 'new' : ''} ${n.id === sel ? 'sel' : ''} ${dimN(n.id) ? 'dim' : ''}" data-id="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.label)}">${hit(n)}${pool(n)}${n.id === sel ? ring(n) : ''}${DRAW[n.kind](n)}</g>`]));
+  let airs = '';
+  M.E.forEach(e => {
+    const dc = dimE(e) ? ' dim' : sel ? ' hot' : '';
+    if (e.air) {
+      const [x1, y1] = e.a, [x2, y2] = e.b, mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + e.arc, d = `M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+      const f = flowAttrs(e);
+      airs += `<g class="edge${dc}"><path d="${d}" class="wire" stroke="${tint(COL[e.cls], 40)}" ${e.cls === 'tun' ? 'stroke-dasharray="2 4"' : ''}/>` + (f ? `<path d="${d}" ${f}/>` : '')
+        + (e.cls === 'tun' || e.label ? `<text class="plbl" x="${mx}" y="${my + e.arc * -.5 - 6}" text-anchor="middle" fill="var(--accent)">${esc(e.label || 'Tunnel')}</text>` : '') + '</g>';
+      return;
+    }
+    const d = pathOf(e.pts), f = flowAttrs(e);
+    items.push([e.depth, `<g class="edge${dc}"><path d="${d}" class="wire ${e.virt ? 'v' : ''}" stroke="${tint(COL[e.cls], e.virt ? 35 : 50)}"/>` + (f ? `<path d="${d}" ${f}/>` : '') + '</g>']);
+  });
+  items.sort((a, b) => a[0] - b[0]);
+  patch($('scene'), items.map(i => i[1]).join('') + airs);
+  // schwebende Glas-Schildchen über jedem Gerät
+  let L = '';
+  M.N.forEach(n => {
+    const b = n.box, [x, y] = n.kind === 'globe' ? P(b.x, b.y, b.z + 50) : P(b.x + b.w / 2, b.y + b.d / 2, (b.z || 0) + b.h + (n.kind === 'cloud' ? 38 : 26));
+    const w = Math.max(n.label.length * 7.4 + 30, (n.sub || '').length * 6.1 + 18), h = n.sub ? 34 : 22;
+    L += `<g class="tag ${dimN(n.id) ? 'dim' : ''} ${n.id === sel ? 'sel' : ''}" transform="translate(${(x - w / 2).toFixed(1)},${(y - h).toFixed(1)})"><rect width="${w.toFixed(0)}" height="${h}" rx="9"/>`
+      + `<circle cx="12" cy="11.5" r="3.2" fill="${LEDC(n.st)}"/><text class="lbl" x="21" y="15.5">${esc(n.label)}</text>`
+      + (n.sub ? `<text class="sub" x="${(w / 2).toFixed(1)}" y="28" text-anchor="middle">${esc(n.sub)}</text>` : '') + '</g>';
+  });
+  M.E.filter(e => e.port).forEach(e => { const p = M.N.find(n => n.id === e.f).ports[e.port - 1], [x, y] = P((e.pts[3][0] + e.pts[4][0]) / 2, e.pts[3][1], 0);
+    L += `<text class="plbl ${dimE(e) ? 'dim' : ''}" x="${x.toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle">${e.port} · ${esc((p.name || '').replace(/\s*\(.*\)/, ''))}</text>`; });
+  patch($('labels'), L);
+  const up = M.N.filter(n => n.st === 'ok').length, total = M.E.reduce((a, e) => a + (e.bps || 0), 0);
+  patch($('hud'), `<span><b>${up}</b>/${M.N.length} aktiv</span><span><b>${M.E.filter(e => e.port).length}</b> Kabel</span><span>Traffic <b>${bits(total)}</b></span>${ST.demo ? '<span>Demo-Daten</span>' : ''}`);
+  patch($('chips'), M.N.filter(n => n.kind !== 'ct').map(n => `<button data-sel="${esc(n.id)}" class="${n.id === sel ? 'on' : ''}"><i style="background:${LEDC(n.st)}"></i>${esc(n.label)}</button>`).join(''));
+  $('upd') && ($('upd').textContent = 'live · ' + new Date(ST.now).toLocaleTimeString('de-DE', { hour12: false }));
+  document.title = (ST.topology.title || 'Homelab') + ' · Packet Tracer'; $('ttl') && ($('ttl').textContent = ST.topology.title || 'Homelab');
+  sheet();
+  if (first) { first = false; patch($('floor'), floor()); fit(false); }
+}
+
+// ── Detail-Blatt (Handy: unten, Desktop: rechts) – nicht modal, Karte bleibt bedienbar ──
+function sheet() {
+  const n = sel && M.N.find(x => x.id === sel), el = $('sheet');
+  el.classList.toggle('open', !!n); stage.classList.toggle('sheeted', !!n);
+  if (!n) return;
+  const row = (a, b) => `<div class="kv"><span>${esc(a)}</span><b>${esc(b)}</b></div>`;
+  let h = `<div class="sh-h"><span class="led ${n.st === 'ok' ? 'ok' : n.st === 'bad' ? 'bad' : n.st === 'warn' ? 'warn' : ''}"></span><div><div class="sh-t">${esc(n.label)}</div><div class="sh-s">${esc(KINDN[n.kind] || '')}${n.sub ? ' · ' + esc(n.sub) : ''}</div></div>`
+    + `<button class="x" data-close aria-label="Schließen">✕</button></div>`;
+  if (n.kind === 'switch') {
+    const ports = n.ports || [], pp = selPort && ports.find(p => p.num === selPort);
+    h += '<div class="pgrid">' + [1, 0].map(top => Array.from({ length: 14 }, (_, c) => { const num = c < 12 ? c * 2 + (top ? 1 : 2) : 25 + (c - 12) * 2 + (top ? 0 : 1); const p = ports.find(q => q.num === num);
+      if (!p) return '<i></i>'; const up = p.status === 'connected';
+      return `<button data-port="${num}" class="${up ? (p.vlan === '50' ? 'sto' : 'lan') : ''} ${num === selPort ? 'on' : ''}" aria-label="Port ${num}">${num}</button>`; }).join('')).join('') + '</div>';
+    if (pp) h += `<div class="pdet">${row('Port', pp.port)}${row('Gerät', pp.name || 'frei')}${row('VLAN', pp.vlan)}${pp.status === 'connected' ? row('Link', pp.speed.replace('a-', '') + ' Mbit/s ' + pp.duplex.replace('a-', '')) + row('Rein / Raus', '↓' + bits(pp.rx) + ' ↑' + bits(pp.tx)) + row('MACs', pp.macs.length) : ''}${pp.protected ? row('Schutz', 'gesperrt') : ''}</div>`;
+    h += '<div class="sec">Belegung</div><div class="list">' + ports.filter(p => p.status === 'connected').map(p => { const t = p.target;
+      return `<button class="li" ${t ? `data-sel="${t}"` : `data-port="${p.num}"`}><span class="pn ${p.vlan === '50' ? 'sto' : 'lan'}">${p.num}</span><span class="nm">${esc((p.name || 'unbekannt').replace(/\s*\(.*\)/, ''))}</span><span class="rt">${bits((p.rx || 0) + (p.tx || 0))}</span></button>`; }).join('') + '</div>';
+  }
+  h += '<div class="kvs">' + (n.info || []).map(([a, b]) => row(a, b)).join('') + '</div>';
+  const con = M.E.filter(e => e.f === n.id || e.t === n.id);
+  if (con.length && n.kind !== 'switch') h += '<div class="sec">Verbindungen</div><div class="list">' + con.map(e => { const o = M.N.find(x => x.id === (e.f === n.id ? e.t : e.f)); if (!o) return '';
+    return `<button class="li" data-sel="${esc(o.id)}"><span class="pn" style="background:${tint(COL[e.cls], 25)};color:${COL[e.cls]}">${e.port || (e.cls === 'tun' ? 'WG' : e.cls === 'sto' ? 'S' : e.virt ? 'V' : '•')}</span><span class="nm">${esc(o.label)}</span><span class="rt">${e.cls === 'tun' ? 'Tunnel' : bits(e.bps)}</span></button>`; }).join('') + '</div>';
+  if (n.href) h += `<button class="go" data-open>Öffnen <span>↗</span></button>`;
+  patch($('sheetc'), h);
+}
+function select(id, port = null, fly = false) {
+  sel = id; selPort = port; render();
+  const n = id && M.N.find(x => x.id === id); if (n && fly) flyTo(n);
+}
+
+// ── Kamera: Pan / Pinch / Doppeltipp / Hinfliegen ─────────────────────────
+let vb = { x: 0, y: 0, w: 1300, h: 800 }, anim = 0;
+const svg = $('g'), stage = $('stage');
+let rq = 0, mvT = 0, vbC = null;   // vbC = zuletzt wirklich gezeichnete viewBox
+// Während Zoom/Pan nur das fertige Bild per GPU-transform verschieben/skalieren (wie Karten-Apps),
+// erst nach 140 ms Ruhe die viewBox setzen → einmal scharf neu zeichnen.
+const commit = () => { vbC = { ...vb }; svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); svg.style.transform = ''; svg.classList.remove('moving'); };
+const apply = (now = false) => {
+  if (now || !vbC) { cancelAnimationFrame(rq); rq = 0; clearTimeout(mvT); commit(); return; }
+  svg.classList.add('moving'); clearTimeout(mvT); mvT = setTimeout(commit, 140);
+  if (!rq) rq = requestAnimationFrame(() => { rq = 0; const W = stage.clientWidth, k = vbC.w / vb.w, s2 = W / vb.w;
+    svg.style.transform = `translate(${(vbC.x - vb.x) * s2}px,${(vbC.y - vb.y) * s2}px) scale(${k})`; });
+};
+const ratio = () => stage.clientWidth / stage.clientHeight;
+function tween(to, ms = 460) {
+  cancelAnimationFrame(anim); const from = { ...vb }, t0 = performance.now();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) ms = 1;
+  const step = t => { const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3); for (const p of ['x', 'y', 'w', 'h']) vb[p] = from[p] + (to[p] - from[p]) * e; apply(); if (k < 1) anim = requestAnimationFrame(step); };
+  anim = requestAnimationFrame(step);
+}
+function fit(animate = true) {
+  if (!M) return;
+  const ps = M.N.flatMap(n => [P(n.box.x, n.box.y + n.box.d, 0), P(n.box.x + n.box.w, n.box.y, (n.box.z || 0) + n.box.h + 60), P(n.box.x + n.box.w, n.box.y + n.box.d, 0), P(n.box.x, n.box.y, (n.box.z || 0) + 70)]);
+  const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
+  const minX = Math.min(...xs) - 30, maxX = Math.max(...xs) + 30, minY = Math.min(...ys) - 90, maxY = Math.max(...ys) + 30;
+  const r = ratio(), w = Math.max(maxX - minX, (maxY - minY) * r), h = w / r;
+  const to = { x: minX - (w - (maxX - minX)) / 2, y: minY - (h - (maxY - minY)) / 2, w, h };
+  animate ? tween(to) : (vb = to, apply());
+}
+// Gerät mittig in den freien Bereich (über dem Blatt bzw. links davon) holen
+function flyTo(n) {
+  const [cx, cy] = center(n), r = ratio(), w = Math.min(Math.max(vb.w * .6, n.kind === 'switch' ? 620 : 380), vb.w), h = w / r;
+  const sh = $('sheet').getBoundingClientRect(), st = stage.getBoundingClientRect(), side = sh.left > st.left + st.width / 2;
+  const ox = side ? (sh.width + 16) / st.width * w / 2 : 0, oy = side ? 0 : (st.bottom - sh.top) / st.height * h / 2;
+  tween({ x: cx - w / 2 + ox, y: cy - h / 2 + oy, w, h });
+}
+function zoomAt(f, cx, cy, animate = false) {   // cx/cy: Bildschirmpunkt, bleibt beim Zoomen fest
+  const r = stage.getBoundingClientRect(), fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height;
+  const nw = Math.min(5000, Math.max(160, vb.w * f)), nh = nw / ratio(), to = { x: vb.x + (vb.w - nw) * fx, y: vb.y + (vb.h - nh) * fy, w: nw, h: nh };
+  animate ? tween(to, 280) : (vb = to, apply());
+}
+stage.addEventListener('wheel', e => { e.preventDefault(); cancelAnimationFrame(anim); zoomAt(Math.exp(e.deltaY * (e.ctrlKey ? .01 : .0015)), e.clientX, e.clientY); }, { passive: false });
+const ptr = new Map(); let g = null, lastTap = { t: 0, id: null };
+const ui = e => e.target.closest('.ctl, .sheet, .chips');
+stage.addEventListener('pointerdown', e => {
+  if (ui(e)) return;
+  stage.setPointerCapture(e.pointerId); ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); cancelAnimationFrame(anim);
+  if (ptr.size === 1) g = { pan: true, sx: e.clientX, sy: e.clientY, vb: { ...vb }, moved: false };
+  else if (ptr.size === 2) { const [a, b] = [...ptr.values()]; g = { pinch: true, d: Math.hypot(a.x - b.x, a.y - b.y), m: [(a.x + b.x) / 2, (a.y + b.y) / 2], vb: { ...vb }, moved: true }; }
+  $('tip').style.display = 'none';
+});
+stage.addEventListener('pointermove', e => {
+  if (!ptr.has(e.pointerId)) { if (e.pointerType === 'mouse' && !ui(e)) tipAt(e); return; }
+  ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const r = stage.getBoundingClientRect();
+  if (g?.pinch && ptr.size >= 2) {
+    const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y), m = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+    const nw = Math.min(5000, Math.max(160, g.vb.w * g.d / d)), nh = nw / ratio();
+    const wx = g.vb.x + (g.m[0] - r.left) / r.width * g.vb.w, wy = g.vb.y + (g.m[1] - r.top) / r.height * g.vb.h;   // Weltpunkt unter den Fingern bleibt unter den Fingern
+    vb = { x: wx - (m[0] - r.left) / r.width * nw, y: wy - (m[1] - r.top) / r.height * nh, w: nw, h: nh }; apply();
+  } else if (g?.pan) {
+    const dx = e.clientX - g.sx, dy = e.clientY - g.sy; if (Math.hypot(dx, dy) > (e.pointerType === 'mouse' ? 4 : 9)) { g.moved = true; stage.classList.add('drag'); }
+    if (g.moved) { const k = vb.w / r.width; vb.x = g.vb.x - dx * k; vb.y = g.vb.y - dy * k; apply(); }
+  }
+});
+function up(e) {
+  if (!ptr.has(e.pointerId)) return;
+  ptr.delete(e.pointerId); stage.classList.remove('drag');
+  if (g?.pan && !g.moved && e.type === 'pointerup') tap(e);
+  if (ptr.size === 1) { const [p] = [...ptr.values()]; g = { pan: true, sx: p.x, sy: p.y, vb: { ...vb }, moved: true }; } else if (!ptr.size) g = null;
+}
+stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+$('zin').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1 / 1.5, r.left + r.width / 2, r.top + r.height / 2, true); };
+$('zout').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.5, r.left + r.width / 2, r.top + r.height / 2, true); };
+$('fit').onclick = () => { select(null); fit(); };
+new ResizeObserver(() => { const r = ratio(); vb.h = vb.w / r; apply(true); }).observe(stage);
+
+// ── Antippen / Klicken ────────────────────────────────────────────────────
+const hitAt = e => document.elementFromPoint(e.clientX, e.clientY);
+function nodeAt(e) { const el = hitAt(e)?.closest?.('.node'); return el && M?.N.find(n => n.id === el.dataset.id); }
+function portAt(e) { const el = hitAt(e)?.closest?.('.port'), n = el && M?.N.find(x => x.id === el.closest('.node')?.dataset.id); return n?.ports?.[+el.dataset.port - 1]; }
+function tap(e) {
+  const p = portAt(e), n = nodeAt(e), id = n?.id || null, now = Date.now(), dbl = now - lastTap.t < 320 && lastTap.id === id;
+  lastTap = { t: now, id };
+  if (dbl) { if (n) flyTo(n); else zoomAt(1 / 1.8, e.clientX, e.clientY, true); return; }   // Doppeltipp: ranzoomen
+  if (!n) { if (sel) select(null); return; }
+  navigator.vibrate?.(6);
+  select(id, p ? p.num : null, id !== sel);
+}
+function tipAt(e) {   // nur Maus: kurze Vorschau beim Drüberfahren
+  const tip = $('tip'), p = portAt(e), n = p ? null : nodeAt(e);
+  if ((!p && !n) || g) { tip.style.display = 'none'; return; }
+  tip.innerHTML = p ? `<div class="t"><span class="led ${p.status === 'connected' ? 'ok' : ''}"></span>Port ${p.num}</div><div class="r"><span>${esc(p.name || 'frei')}</span></div>${p.status === 'connected' ? `<div class="r"><span>↓${bits(p.rx)} ↑${bits(p.tx)}</span></div>` : ''}`
+    : `<div class="t"><span class="led ${n.st === 'ok' ? 'ok' : n.st === 'bad' ? 'bad' : n.st === 'warn' ? 'warn' : ''}"></span>${esc(n.label)}</div>${n.sub ? `<div class="r"><span>${esc(n.sub)}</span></div>` : ''}`;
+  tip.style.display = 'block';
+  const r = stage.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(e.clientX - r.left + 14, r.width - tip.offsetWidth - 8)) + 'px'; tip.style.top = Math.max(8, Math.min(e.clientY - r.top + 14, r.height - tip.offsetHeight - 8)) + 'px';
+}
+function open(n) { if (n?.href) n.href.startsWith('/') ? (location.href = n.href) : window.open(n.href, '_blank', 'noopener'); }
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-sel],[data-port],[data-close],[data-open]'); if (!b || !b.closest('.sheet, .chips')) return;
+  if (b.dataset.close != null) return select(null);
+  if (b.dataset.open != null) return open(M.N.find(n => n.id === sel));
+  if (b.dataset.port) return select(sel, +b.dataset.port);
+  select(b.dataset.sel, null, true);
+});
+// Blatt nach unten wischen = schließen
+(() => { const el = $('sheet'); let y0 = null, dy = 0;
+  el.addEventListener('pointerdown', e => { if (!e.target.closest('.grab, .sh-h') || e.target.closest('button')) return; y0 = e.clientY; dy = 0; el.setPointerCapture(e.pointerId); el.style.transition = 'none'; });
+  el.addEventListener('pointermove', e => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); el.style.transform = `translateY(${dy}px)`; });
+  const end = () => { if (y0 == null) return; y0 = null; el.style.transition = ''; el.style.transform = ''; if (dy > 70) select(null); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); })();
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && sel) select(null);
+  if (e.key === 'Enter') { const el = document.activeElement.closest?.('.node'); if (el) select(el.dataset.id, null, true); }
+});
+
+// Editor-Vorschau: ungespeicherter Entwurf kommt per postMessage aus /edit
+let draft = null;
+const show = s => { try { render(draft ? { ...s, topology: draft } : s); } catch (e) { console.warn('Entwurf nicht darstellbar:', e.message); } };
+addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'pt-draft') { draft = e.data.topology; if (ST) show(ST.raw || ST); } });
+poll((s, err) => { if (s) { s.raw = s; show(s); } }, 3000);
+</script>
+</body>
+</html>

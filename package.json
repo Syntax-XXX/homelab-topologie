@@ -1,0 +1,9 @@
+{
+  "name": "homelab-packet-tracer",
+  "version": "1.0.0",
+  "description": "Live-Topologie fürs Homelab: isometrische Glas-Geräte, Kabel am echten Switch-Port, Pakete fließen mit der Datenrate. Mit Editor.",
+  "license": "MIT",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js", "test": "node --test test/" }
+}

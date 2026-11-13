@@ -1,0 +1,36 @@
+{
+  "title": "Mein Homelab",
+  "devices": [
+    { "id": "internet", "kind": "globe", "name": "Internet", "sub": "Glasfaser" },
+    { "id": "edge", "kind": "cloud", "name": "Cloudflare", "sub": "DNS · Proxy" },
+    { "id": "vps", "kind": "vps", "name": "vps", "sub": "Reverse-Proxy", "print": "CLOUD · VPS" },
+    { "id": "router", "kind": "router", "name": "Router", "sub": "192.168.1.1 · Gateway", "print": "ROUTER", "ip": "192.168.1.1" },
+    { "id": "switch", "kind": "switch", "name": "core-switch", "sub": "24 Ports", "ports": 24, "print": "SWITCH" },
+    { "id": "server-1", "kind": "server", "name": "server-1", "print": "PROXMOX · NODE 1", "ip": "192.168.1.10" },
+    { "id": "server-2", "kind": "server", "name": "server-2", "print": "PROXMOX · NODE 2", "ip": "192.168.1.11" },
+    { "id": "nas", "kind": "nas", "name": "nas", "print": "NAS", "disks": 3, "ip": "192.168.1.20", "info": { "Speicher": "3 × 8 TB" } },
+    { "id": "docker", "kind": "guest", "name": "docker", "host": "server-1", "sub": "VM 100" },
+    { "id": "pihole", "kind": "guest", "name": "pihole", "host": "server-1", "sub": "LXC 101", "lxc": true },
+    { "id": "media", "kind": "guest", "name": "media", "host": "server-2", "sub": "VM 200" },
+    { "id": "nginx", "kind": "ct", "name": "nginx", "host": "docker" },
+    { "id": "grafana", "kind": "ct", "name": "grafana", "host": "docker" },
+    { "id": "jellyfin", "kind": "ct", "name": "jellyfin", "host": "docker" }
+  ],
+  "links": [
+    { "from": "internet", "to": "router", "type": "inet" },
+    { "from": "edge", "to": "internet", "type": "inet" },
+    { "from": "edge", "to": "vps", "type": "inet" },
+    { "from": "vps", "to": "server-1", "type": "tun", "label": "WireGuard" },
+    { "from": "switch", "to": "router", "port": 1, "type": "lan" },
+    { "from": "switch", "to": "server-1", "port": 3, "type": "lan" },
+    { "from": "switch", "to": "server-2", "port": 5, "type": "lan" },
+    { "from": "switch", "to": "nas", "port": 7, "type": "lan" },
+    { "from": "switch", "to": "nas", "port": 20, "type": "sto", "id": "nas-storage" },
+    { "from": "server-1", "to": "docker", "type": "vm" },
+    { "from": "server-1", "to": "pihole", "type": "vm" },
+    { "from": "server-2", "to": "media", "type": "vm" },
+    { "from": "docker", "to": "nginx", "type": "ct" },
+    { "from": "docker", "to": "grafana", "type": "ct" },
+    { "from": "docker", "to": "jellyfin", "type": "ct" }
+  ]
+}

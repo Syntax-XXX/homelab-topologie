@@ -1,0 +1,13 @@
+services:
+  packet-tracer:
+    build: .
+    container_name: packet-tracer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN in .env setzen (openssl rand -hex 24)}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      DEMO: ${DEMO:-1}
+    volumes:
+      - ./data:/app/data
