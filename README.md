@@ -1,18 +1,48 @@
-# Homelab Packet Tracer
+<h1 align="center">Homelab Topologie</h1>
 
-Live-Topologie fürs Homelab im Browser: Geräte als isometrische Glaskästen, Kabel am echten
-Switch-Port, Pakete fließen mit der aktuellen Datenrate. Mit Editor zum Hinzufügen und Entfernen
-von Geräten und Verbindungen. Läuft ohne Abhängigkeiten (nur Node.js) und funktioniert am Handy
-als Web-App.
+<p align="center">
+  Live 3D topology of your homelab — devices, cables and packets in real time.<br>
+  A glass rack that unfolds, a browser editor, zero dependencies (just Node.js).
+</p>
 
-- **Ansicht** `/`: antippen öffnet Details, Pinch/Mausrad zoomt, Doppeltipp fliegt zum Gerät.
-  Ein Switch zeigt alle Ports und was wo steckt.
-- **Editor** `/edit`: Geräte und Verbindungen per Formular, rechts eine Live-Vorschau.
-  Gespeichert wird mit dem Admin-Token, eine JSON-Ansicht gibt es zum Sichern und Teilen.
-- **Live-Daten:** Datenraten und CPU kommen per `POST /api/metrics`. Solange nichts kommt,
-  zeigt er Demo-Werte. Erreichbarkeit prüft der Server selbst (http/https/tcp).
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="Unfolded 3D topology with packets flowing over every cable" width="900">
+</p>
 
-## Starten
+## Features
+
+- **3D view (Three.js).** Starts as a glass rack with all hardware inside. Tap it and the
+  devices slide out through the door to their place. Drag to orbit, pinch or scroll to zoom,
+  double-tap to fly to a device.
+- **Live packets.** Every cable carries packets at its current data rate, and switch ports
+  light up where something is plugged in.
+- **Fill levels.** CPU, RAM and disk blocks inside servers and NAS bays fill up with real usage.
+- **Device details.** Tap a device for IP, load, connections and an "Open" button.
+- **2D isometric view.** One button away and lighter on old devices.
+- **Editor** at `/edit`. Add and remove devices and links in a form with a live preview,
+  plus a JSON view for backup and sharing.
+- **Health checks.** The server probes `http(s)://` and `tcp://` targets itself.
+- **Web app.** Works on phones and has a dark and a light theme. The UI is in German.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/rack.png" alt="Default view: everything inside a glass rack"><br><sub><b>Rack</b> — the default view; tap to unfold</sub></td>
+    <td width="50%"><img src="docs/screenshots/detail.png" alt="Device detail panel with CPU, RAM and connections"><br><sub><b>Details</b> — load, IP and every connection with its rate</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/view-2d.png" alt="2D isometric view with switch ports and labels"><br><sub><b>2D isometric</b> — port numbers on every cable</sub></td>
+    <td width="50%"><img src="docs/screenshots/editor.png" alt="Editor with device list and live preview"><br><sub><b>Editor</b> — forms on the left, live preview on the right</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/phone.png" alt="Topology on a phone" width="260"><br>
+  <sub>On a phone, as a web app</sub>
+</p>
+
+## Quick start
 
 ```sh
 cp .env.example .env
@@ -20,26 +50,26 @@ echo "ADMIN_TOKEN=$(openssl rand -hex 24)" >> .env
 docker compose up -d --build        # → http://<server>:8080
 ```
 
-Ohne Docker: `ADMIN_TOKEN=… node server.js` (Node ≥ 18). Tests: `npm test`.
+Without Docker: `ADMIN_TOKEN=… node server.js` (Node ≥ 18). Tests: `npm test`.
 
-Die Topologie liegt in `data/topology.json`. Beim ersten Start wird `topology.example.json` gezeigt.
-Speichern im Editor legt dann die eigene Datei an.
+The topology lives in `data/topology.json`. On the first start you see `topology.example.json`;
+saving in the editor creates your own file.
 
-| Variable | Bedeutung |
+| Variable | Meaning |
 |---|---|
-| `ADMIN_TOKEN` | erlaubt Speichern im Editor (und Metriken). Ohne Token ist der Editor nur lesend. |
-| `METRICS_TOKEN` | optional: eigener Token nur für `POST /api/metrics` |
-| `DEMO` | `1` (Standard) = simulierter Traffic, bis echte Metriken kommen; `0` = aus |
-| `PORT`, `DATA_DIR` | Port (8080) und Datenordner |
+| `ADMIN_TOKEN` | allows saving in the editor (and sending metrics). Without it the editor is read-only. |
+| `METRICS_TOKEN` | optional: a separate token only for `POST /api/metrics` |
+| `DEMO` | `1` (default) = simulated traffic until real metrics arrive; `0` = off |
+| `PORT`, `DATA_DIR` | port (8080) and data directory |
 
-> Die Seite selbst hat keinen Login. Stell sie nur ins LAN/VPN oder hinter einen Login-Proxy
-> (z. B. oauth2-proxy, Authelia). Der Admin-Token schützt nur das Speichern.
+> The page itself has no login. Keep it on your LAN/VPN or behind a login proxy
+> (e.g. oauth2-proxy, Authelia). The admin token only protects saving.
 
-## Topologie-Format
+## Topology format
 
 ```json
 {
-  "title": "Mein Homelab",
+  "title": "My Homelab",
   "devices": [
     { "id": "switch", "kind": "switch", "name": "core-switch", "ports": 24 },
     { "id": "server-1", "kind": "server", "name": "server-1", "ip": "192.168.1.10", "check": "tcp://192.168.1.10:22" },
@@ -52,52 +82,54 @@ Speichern im Editor legt dann die eigene Datei an.
 }
 ```
 
-**Geräte (`kind`):** `switch` (bis 24 Ports + 4 SFP), `router`, `server` (CPU/RAM sichtbar),
-`nas` (`disks` 0–4), `guest` (VM, mit `"lxc": true` als LXC), `ct` (Container), `vps`, `cloud`,
-`globe` (Internet), `generic`.
+**Devices (`kind`):** `switch` (up to 24 ports + 4 SFP), `router`, `server` (CPU/RAM visible),
+`nas` (`disks` 0–4), `guest` (VM; `"lxc": true` for an LXC), `ct` (container), `vps`, `cloud`,
+`globe` (internet), `generic`.
 
-Optionale Felder:
-- `ip`, `sub`, `print`: Aufdruck auf dem Gerät
-- `href`: Button „Öffnen“
-- `check`: `https://…` oder `tcp://host:port`
-- `info`: `{ "Name": "Wert" }`
-- `host`: Gast oder Container läuft auf diesem Gerät
-- `x`/`y`/`z`: eigene Position; ohne Angabe wird automatisch angeordnet
+Optional fields:
+- `ip`, `sub`, `print`: text printed on the device
+- `href`: "Open" button
+- `check`: `https://…` or `tcp://host:port`
+- `info`: `{ "Name": "Value" }`
+- `host`: the guest or container runs on this device
+- `x`/`y`/`z`: fixed position; otherwise it is laid out automatically
 
-**Verbindungen (`type`):**
-- `lan`, `sto` (Storage), `inet`, `tun` (VPN, gestrichelt), `vm`, `ct`
-- `port`: nur wenn `from` ein Switch ist
-- `label`: Beschriftung
-- `id`: für Metriken. Ohne Angabe ist die id `<from>--<to>`.
+**Links (`type`):**
+- `lan`, `sto` (storage), `inet`, `tun` (VPN, dashed), `vm`, `ct`
+- `port`: only when `from` is a switch
+- `label`: caption
+- `id`: used for metrics. Defaults to `<from>--<to>`.
 
-## Live-Daten senden
+## Sending live data
 
 ```sh
-curl -X POST http://packet-tracer:8080/api/metrics -H "Authorization: Bearer $TOKEN" -d '{
+curl -X POST http://topologie:8080/api/metrics -H "Authorization: Bearer $TOKEN" -d '{
   "links":   { "switch--server-1": { "rx": 1250000, "tx": 80000 } },
   "devices": { "server-1": { "cpu": 0.42, "mem": 0.61, "disk": 0.35, "load": 0.2, "status": "ok", "sub": "12 VMs" } }
 }'
 ```
 
-- **Einheiten:** `rx` und `tx` in Byte/s; `cpu`, `mem`, `disk` (belegter Speicher) und `load` (Last pro Kern) von 0 bis 1. Die Blöcke in Servern und NAS füllen sich damit sichtbar.
-- **Status:** `status` ist `ok`, `warn`, `bad` oder `off`.
-- **Demo-Modus:** Sobald Metriken ankommen, ist der Demo-Modus für 60 s aus. Verbindungen ohne Werte bleiben dann still.
-- **Fertiges Beispiel:** [`examples/push-metrics.sh`](examples/push-metrics.sh) liest `/proc/net/dev` einer Netzwerkkarte und schickt die Rate alle 5 s:
+- **Units:** `rx` and `tx` in bytes/s; `cpu`, `mem`, `disk` (used storage) and `load` (load per core) from 0 to 1.
+  The blocks inside servers and NAS fill up with these values.
+- **Status:** `ok`, `warn`, `bad` or `off`.
+- **Demo mode** turns off for 60 s as soon as metrics arrive. Links without values then stay quiet.
+- **Ready-made example:** [`examples/push-metrics.sh`](examples/push-metrics.sh) reads `/proc/net/dev` for one
+  network interface and sends the rate every 5 s:
 
 ```sh
-URL=http://packet-tracer:8080 TOKEN=… LINK=switch--server-1 IFACE=eth0 DEVICE=server-1 ./examples/push-metrics.sh
+URL=http://topologie:8080 TOKEN=… LINK=switch--server-1 IFACE=eth0 DEVICE=server-1 ./examples/push-metrics.sh
 ```
 
-Andere Quellen funktionieren genauso, solange sie dieses JSON schicken: SNMP vom Switch, Proxmox-API oder Prometheus.
+Any other source works the same way as long as it sends this JSON: SNMP from the switch, the Proxmox API or Prometheus.
 
 ## API
 
-| Methode | Pfad | |
+| Method | Path | |
 |---|---|---|
-| GET | `/api/state` | Topologie + aktuelle Werte |
-| PUT | `/api/topology` | Topologie speichern (Bearer `ADMIN_TOKEN`, wird geprüft) |
-| POST | `/api/metrics` | Werte senden (Bearer `METRICS_TOKEN` oder `ADMIN_TOKEN`) |
+| GET | `/api/state` | topology + current values |
+| PUT | `/api/topology` | save the topology (Bearer `ADMIN_TOKEN`, validated) |
+| POST | `/api/metrics` | send values (Bearer `METRICS_TOKEN` or `ADMIN_TOKEN`) |
 
-## Lizenz
+## License
 
-MIT. Die Schriften Geist / Geist Mono stehen unter der SIL Open Font License.
+MIT. The Geist / Geist Mono fonts are under the SIL Open Font License.
