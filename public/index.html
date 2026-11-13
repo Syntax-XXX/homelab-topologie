@@ -22,9 +22,10 @@
     .bare .stage { height: 100dvh; }
   .stage.drag { cursor: grabbing; }
   svg#g { width: 100%; height: 100%; display: block; transform-origin: 0 0; }
-  svg#g.moving { will-change: transform; }
+  svg#g { will-change: transform; }   /* eigene GPU-Ebene, bleibt als fertiges Bild liegen */
   /* Pakete auf eigener GPU-Ebene: ihre Animation zeichnet nicht mehr die ganze Szene neu */
-  #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transform-origin: 0 0; will-change: transform; }
+  #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  @media (pointer: coarse) { .blink { animation: none; } }   /* Handy: keine blinkenden LEDs → Szene bleibt ein stehendes Bild */
   .hud, .chips { z-index: 3; }
   .ctl { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 2; }
   .ctl button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--panel) 94%, transparent); color: var(--text-2); cursor: pointer; font: 16px var(--mono); }
@@ -141,7 +142,7 @@
         </defs>
         <g id="floor"></g><g id="scene"></g><g id="labels"></g>
       </svg>
-      <svg id="fx" aria-hidden="true"></svg>
+      <canvas id="fx" aria-hidden="true"></canvas>
       <div class="legend"><span><i style="background:var(--c2)"></i>LAN</span><span><i style="background:var(--c3)"></i>Storage</span><span><i style="background:var(--accent)"></i>Internet / Tunnel</span><span><i style="background:var(--ok)"></i>VM / Container</span><span>Tempo = Datenrate</span></div>
       <div class="ctl"><button id="zin" aria-label="Vergrößern">+</button><button id="zout" aria-label="Verkleinern">−</button><button id="fit" aria-label="Alles zeigen">⤢</button></div>
       <div class="tip" id="tip"></div>
@@ -379,16 +380,19 @@ function pool(n) {
   const id = 'pl' + String(n.id).replace(/\W/g, '');
   return `<radialGradient id="${id}"><stop stop-color="${POOL[n.kind]}" stop-opacity=".3"/><stop offset="1" stop-color="${POOL[n.kind]}" stop-opacity="0"/></radialGradient><ellipse cx="${x}" cy="${y + 4}" rx="${r * 1.25}" ry="${r * .62}" fill="url(#${id})"/>`;
 }
-function ring(n) {
-  if (n.kind === 'globe') { const [x, y] = P(n.box.x, n.box.y, n.box.z); return `<circle class="ring" cx="${x}" cy="${y}" r="46"/>`; }
+function ringPath(n) {
+  const r = new Path2D();
+  if (n.kind === 'globe') { const [x, y] = P(n.box.x, n.box.y, n.box.z); r.arc(x, y, 46, 0, Math.PI * 2); return r; }
   const { x, y, z = 0, w, d } = n.box, m = 12;
-  return poly([[x - m, y - m, z], [x + w + m, y - m, z], [x + w + m, y + d + m, z], [x - m, y + d + m, z]], 'class="ring"');
+  [[x - m, y - m], [x + w + m, y - m], [x + w + m, y + d + m], [x - m, y + d + m]].forEach(([a, b], i) => { const [u, v] = P(a, b, z); i ? r.lineTo(u, v) : r.moveTo(u, v); });
+  r.closePath(); return r;
 }
-function flowAttrs(e) {
-  const sp = e.cls === 'tun' ? 3 : speed(e.bps); if (!sp) return null;
-  return `class="flow ${e.rev ? 'rev' : ''} ${e.cls === 'tun' ? 'tun' : ''}" stroke="${COL[e.cls]}" stroke-width="${e.cls === 'tun' ? 2 : width(e.bps)}" style="animation-duration:${sp.toFixed(2)}s;animation-delay:-${((Date.now() / 1000) % sp).toFixed(2)}s"`;
+function flowOf(e, dim) {
+  const tun = e.cls === 'tun', sp = tun ? 3 : speed(e.bps); if (!sp) return null;
+  return { c: COL[e.cls], w: tun ? 2 : width(e.bps), v: 120 / sp, rev: !!e.rev, dash: tun ? [8, 12] : [.1, 19.9], a: dim ? .14 : 1 };
 }
 const related = () => { const r = new Set(sel ? [sel] : []); if (sel) M.E.forEach(e => { if (e.f === sel) r.add(e.t); if (e.t === sel) r.add(e.f); }); return r; };
+let lastHeavy = 0, FL = [], RG = null;
 function render(s) {
   if (s && stage.classList.contains('moving')) { pendingS = s; return; }
   if (s) { ST = s; M = model(s); M.N.forEach(n => { n.fresh = !first && !known.has(n.id); known.add(n.id); }); }
@@ -396,25 +400,25 @@ function render(s) {
   if (sel && !M.N.some(n => n.id === sel)) sel = null;
   const rel = related(), dimN = id => sel && !rel.has(id), dimE = e => sel && e.f !== sel && e.t !== sel;
   const items = [];
-  M.N.forEach(n => items.push([depthOf(n), `<g class="node ${n.st === 'off' ? 'off' : ''} ${n.fresh ? 'new' : ''} ${n.id === sel ? 'sel' : ''} ${dimN(n.id) ? 'dim' : ''}" data-id="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.label)}">${hit(n)}${pool(n)}${n.id === sel ? ring(n) : ''}${DRAW[n.kind](n)}</g>`]));
-  let airs = '', F = '';
+  M.N.forEach(n => items.push([depthOf(n), `<g class="node ${n.st === 'off' ? 'off' : ''} ${n.fresh ? 'new' : ''} ${n.id === sel ? 'sel' : ''} ${dimN(n.id) ? 'dim' : ''}" data-id="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.label)}">${hit(n)}${pool(n)}${DRAW[n.kind](n)}</g>`]));
+  let airs = '';
+  const FLn = [];
   M.E.forEach(e => {
     const dc = dimE(e) ? ' dim' : sel ? ' hot' : '';
     if (e.air) {
       const [x1, y1] = e.a, [x2, y2] = e.b, mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + e.arc, d = `M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
-      const f = flowAttrs(e);
-      if (f) F += `<g class="edge${dc}"><path d="${d}" ${f}/></g>`;
+      const f = flowOf(e, dimE(e)); if (f) FLn.push({ ...f, p: new Path2D(d) });
       airs += `<g class="edge${dc}"><path d="${d}" class="wire" stroke="${tint(COL[e.cls], 40)}" ${e.cls === 'tun' ? 'stroke-dasharray="2 4"' : ''}/>`
         + (e.cls === 'tun' || e.label ? `<text class="plbl" x="${mx}" y="${my + e.arc * -.5 - 6}" text-anchor="middle" fill="var(--accent)">${esc(e.label || 'Tunnel')}</text>` : '') + '</g>';
       return;
     }
-    const d = pathOf(e.pts), f = flowAttrs(e);
-    if (f) F += `<g class="edge${dc}"><path d="${d}" ${f}/></g>`;
+    const d = pathOf(e.pts), f = flowOf(e, dimE(e)); if (f) FLn.push({ ...f, p: new Path2D(d) });
     items.push([e.depth, `<g class="edge${dc}"><path d="${d}" class="wire ${e.virt ? 'v' : ''}" stroke="${tint(COL[e.cls], e.virt ? 35 : 50)}"/></g>`]);
   });
   items.sort((a, b) => a[0] - b[0]);
-  patch($('scene'), items.map(i => i[1]).join('') + airs);
-  patch($('fx'), F);
+  FL = FLn; const sn = sel && M.N.find(n => n.id === sel); RG = sn ? ringPath(sn) : null;
+  const heavy = !s || first || Date.now() - lastHeavy > (vb.w < 900 ? 12000 : 4000);
+  if (heavy) { lastHeavy = Date.now(); patch($('scene'), items.map(i => i[1]).join('') + airs); }
   // schwebende Glas-Schildchen über jedem Gerät
   let L = '';
   M.N.forEach(n => {
@@ -426,7 +430,7 @@ function render(s) {
   });
   M.E.filter(e => e.port).forEach(e => { const p = M.N.find(n => n.id === e.f).ports[e.port - 1], [x, y] = P((e.pts[3][0] + e.pts[4][0]) / 2, e.pts[3][1], 0);
     L += `<text class="plbl ${dimE(e) ? 'dim' : ''}" x="${x.toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle">${e.port} · ${esc((p.name || '').replace(/\s*\(.*\)/, ''))}</text>`; });
-  patch($('labels'), L);
+  if (heavy) patch($('labels'), L);
   const up = M.N.filter(n => n.st === 'ok').length, total = M.E.reduce((a, e) => a + (e.bps || 0), 0);
   patch($('hud'), `<span><b>${up}</b>/${M.N.length} aktiv</span><span><b>${M.E.filter(e => e.port).length}</b> Kabel</span><span>Traffic <b>${bits(total)}</b></span>${ST.demo ? '<span>Demo-Daten</span>' : ''}`);
   patch($('chips'), M.N.filter(n => n.kind !== 'ct').map(n => `<button data-sel="${esc(n.id)}" class="${n.id === sel ? 'on' : ''}"><i style="background:${LEDC(n.st)}"></i>${esc(n.label)}</button>`).join(''));
@@ -468,17 +472,39 @@ function select(id, port = null, fly = false) {
 // ── Kamera: Pan / Pinch / Doppeltipp / Hinfliegen ─────────────────────────
 let vb = { x: 0, y: 0, w: 1300, h: 800 }, anim = 0;
 const svg = $('g'), stage = $('stage');
-let rq = 0, mvT = 0, vbC = null, pendingS = null; const fx = $('fx');   // vbC = zuletzt wirklich gezeichnete viewBox
+let rq = 0, mvT = 0, vbC = null, pendingS = null;   // vbC = zuletzt wirklich gezeichnete viewBox
 // Während Zoom/Pan nur das fertige Bild per GPU-transform verschieben/skalieren (wie Karten-Apps),
 // erst nach 140 ms Ruhe die viewBox setzen → einmal scharf neu zeichnen.
-const commit = () => { vbC = { ...vb }; const v = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`; svg.setAttribute('viewBox', v); fx.setAttribute('viewBox', v); svg.style.transform = fx.style.transform = ''; svg.classList.remove('moving'); stage.classList.remove('moving');
+// ── Pakete + Auswahlrahmen auf Canvas: pro Frame nur ein paar Striche – egal wie nah gezoomt ──
+const cv = $('fx'), g2 = cv.getContext('2d'), still = matchMedia('(prefers-reduced-motion: reduce)');
+let colC = {}, idle = false;
+const cssCol = v => { const m = /var\((--[\w-]+)\)/.exec(v); return !m ? v : (colC[m[1]] ??= getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || '#888'); };
+new MutationObserver(() => { colC = {}; }).observe(document.documentElement, { attributes: true });
+function drawFx(t) {
+  requestAnimationFrame(drawFx);
+  if (document.hidden || (!FL.length && !RG && idle)) return;   // nichts zu animieren → Canvas ruht
+  idle = !FL.length && !RG;
+  const dpr = Math.min(2, devicePixelRatio || 1), W = stage.clientWidth, H = stage.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const k = dpr * W / vb.w, sec = still.matches ? 0 : t / 1000;
+  g2.setTransform(1, 0, 0, 1, 0, 0); g2.clearRect(0, 0, cv.width, cv.height);
+  g2.setTransform(k, 0, 0, k, -vb.x * k, -vb.y * k);   // gleiche Welt-Koordinaten wie das SVG, immer mit der aktuellen Kamera
+  g2.lineCap = 'round'; g2.lineJoin = 'round';
+  for (const f of FL) {
+    g2.globalAlpha = f.a; g2.strokeStyle = cssCol(f.c); g2.lineWidth = f.w; g2.setLineDash(f.dash);
+    g2.lineDashOffset = (f.rev ? 1 : -1) * ((sec * f.v) % 20); g2.stroke(f.p);
+  }
+  if (RG) { g2.globalAlpha = 1; g2.strokeStyle = cssCol('var(--accent)'); g2.lineWidth = 1.6; g2.setLineDash([5, 5]); g2.lineDashOffset = -((sec * 12.5) % 10); g2.stroke(RG); }
+}
+requestAnimationFrame(drawFx);
+const commit = () => { vbC = { ...vb }; const v = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`; svg.setAttribute('viewBox', v); svg.style.transform = ''; svg.classList.remove('moving'); stage.classList.remove('moving');
   if (pendingS) { const p = pendingS; pendingS = null; render(p); } };
 const apply = (now = false) => {
   if (now || !vbC) { cancelAnimationFrame(rq); rq = 0; clearTimeout(mvT); commit(); return; }
   svg.classList.add('moving'); stage.classList.add('moving'); clearTimeout(mvT);
   if (!ptr.size) mvT = setTimeout(commit, 140);   // Finger noch drauf → erst beim Loslassen scharf zeichnen
   if (!rq) rq = requestAnimationFrame(() => { rq = 0; const W = stage.clientWidth, k = vbC.w / vb.w, s2 = W / vb.w;
-    svg.style.transform = fx.style.transform = `translate(${(vbC.x - vb.x) * s2}px,${(vbC.y - vb.y) * s2}px) scale(${k})`; });
+    svg.style.transform = `translate(${(vbC.x - vb.x) * s2}px,${(vbC.y - vb.y) * s2}px) scale(${k})`; });
 };
 const ratio = () => stage.clientWidth / stage.clientHeight;
 function tween(to, ms = 460) {
@@ -588,7 +614,7 @@ addEventListener('keydown', e => {
 // Editor-Vorschau: ungespeicherter Entwurf kommt per postMessage aus /edit
 let draft = null;
 const show = s => { try { render(draft ? { ...s, topology: draft } : s); } catch (e) { console.warn('Entwurf nicht darstellbar:', e.message); } };
-addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'pt-draft') { draft = e.data.topology; if (ST) show(ST.raw || ST); } });
+addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'pt-draft') { draft = e.data.topology; lastHeavy = 0; if (ST) show(ST.raw || ST); } });
 poll((s, err) => { if (s) { s.raw = s; show(s); } }, 3000);
 </script>
 </body>
