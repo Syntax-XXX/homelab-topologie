@@ -52,8 +52,10 @@ function tickDemo() {
     demo[id] = { rx: walk(o.rx), tx: walk(o.tx) };
   }
   for (const d of topo.devices) if (['server', 'guest', 'ct', 'nas', 'vps'].includes(d.kind)) {
-    const o = demo['dev:' + d.id] || { cpu: Math.random() * .5, mem: .3 + Math.random() * .4 };
-    demo['dev:' + d.id] = { cpu: Math.min(.98, Math.max(.02, o.cpu + (Math.random() - .5) * .12)), mem: Math.min(.95, Math.max(.1, o.mem + (Math.random() - .5) * .03)) };
+    const o = demo['dev:' + d.id] || { cpu: Math.random() * .5, mem: .3 + Math.random() * .4, disk: .2 + Math.random() * .6 };
+    const cl = (v, a, b) => Math.min(b, Math.max(a, v));
+    demo['dev:' + d.id] = { cpu: cl(o.cpu + (Math.random() - .5) * .12, .02, .98), mem: cl(o.mem + (Math.random() - .5) * .03, .1, .95), disk: cl(o.disk + (Math.random() - .4) * .004, .05, .97),
+      ...(['server', 'vps'].includes(d.kind) ? { load: cl(o.cpu * 1.1, 0, 1.5) } : {}) };
   }
 }
 if (DEMO) { tickDemo(); setInterval(tickDemo, 2000).unref(); }
@@ -95,7 +97,7 @@ const server = http.createServer(async (req, res) => {
       const m = await body(req, 2e5);
       const clean = (o, keys) => Object.fromEntries(Object.entries(o || {}).slice(0, 2000).map(([k, v]) => [k, Object.fromEntries(keys.filter(x => v?.[x] != null).map(x => [x, typeof v[x] === 'number' ? v[x] : String(v[x]).slice(0, 80)]))]));
       Object.assign(metrics.links, clean(m.links, ['rx', 'tx']));
-      Object.assign(metrics.devices, clean(m.devices, ['cpu', 'mem', 'status', 'sub']));
+      Object.assign(metrics.devices, clean(m.devices, ['cpu', 'mem', 'disk', 'load', 'status', 'sub']));
       metrics.at = Date.now();
       return send(res, 200, { ok: true });
     }

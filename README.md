@@ -75,11 +75,12 @@ Optionale Felder:
 ```sh
 curl -X POST http://packet-tracer:8080/api/metrics -H "Authorization: Bearer $TOKEN" -d '{
   "links":   { "switch--server-1": { "rx": 1250000, "tx": 80000 } },
-  "devices": { "server-1": { "cpu": 0.42, "mem": 0.61, "status": "ok", "sub": "12 VMs" } }
+  "devices": { "server-1": { "cpu": 0.42, "mem": 0.61, "disk": 0.35, "load": 0.2, "status": "ok", "sub": "12 VMs" } }
 }'
 ```
 
-- **Einheiten:** `rx` und `tx` in Byte/s, `cpu` und `mem` von 0 bis 1, `status` ist `ok`, `warn`, `bad` oder `off`.
+- **Einheiten:** `rx` und `tx` in Byte/s; `cpu`, `mem`, `disk` (belegter Speicher) und `load` (Last pro Kern) von 0 bis 1. Die Blöcke in Servern und NAS füllen sich damit sichtbar.
+- **Status:** `status` ist `ok`, `warn`, `bad` oder `off`.
 - **Demo-Modus:** Sobald Metriken ankommen, ist der Demo-Modus für 60 s aus. Verbindungen ohne Werte bleiben dann still.
 - **Fertiges Beispiel:** [`examples/push-metrics.sh`](examples/push-metrics.sh) liest `/proc/net/dev` einer Netzwerkkarte und schickt die Rate alle 5 s:
 

@@ -186,6 +186,17 @@ function block(x, y, z, w, d, h, col, a = 40) {
     + poly([[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]], `fill="${tint(col, a)}" stroke="${tint(col, 80)}" stroke-width=".6"`);
 }
 
+// Füllstand: leerer, gestrichelter Rahmen in voller Größe, darin ein Block bis zur Auslastung (0–1)
+function tank(x, y, z, w, d, h, f, col, on = true, depth = false) {   // depth: füllt von vorn nach hinten (für flache Geräte)
+  f = Math.max(0, Math.min(1, +f || 0));
+  const lvl = !on || f <= 0 ? '' : depth ? block(x, y + d - Math.max(1.5, d * f), z, w, Math.max(1.5, d * f), h, col, 62) : block(x, y, z, w, d, Math.max(.8, h * f), col, 62);
+  const st = `fill="none" stroke="${tint(on ? col : 'var(--off)', 30)}" stroke-width=".5" stroke-dasharray="1.5 1.5"`;
+  return lvl + poly([[x, y + d, z], [x + w, y + d, z], [x + w, y + d, z + h], [x, y + d, z + h]], st)
+    + poly([[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]], st)
+    + poly([[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]], st);
+}
+const hotC = f => f > .85 ? 'var(--bad)' : f > .6 ? 'var(--warn)' : null;
+
 // ── Gerätezeichnungen ─────────────────────────────────────────────────────
 const DRAW = {
   switch(n) {
@@ -206,9 +217,11 @@ const DRAW = {
     const b = n.box, col = 'var(--text)', on = n.st === 'ok', L = n.load || 0, M = n.mem || 0;
     let inner = poly([[b.x + 6, b.y + 6, 3], [b.x + b.w - 6, b.y + 6, 3], [b.x + b.w - 6, b.y + b.d - 6, 3], [b.x + 6, b.y + b.d - 6, 3]], `fill="${tint('var(--ok)', 6)}" stroke="${tint('var(--ok)', 22)}" stroke-width=".6"`);
     const cpuC = L > .8 ? 'var(--bad)' : L > .5 ? 'var(--warn)' : 'var(--accent)';
-    inner += block(b.x + 30, b.y + 22, 3, 26, 26, 7, on ? cpuC : 'var(--off)', on ? 30 + L * 60 : 15);
-    for (let i = 0; i < 8; i++) inner += block(b.x + 66 + i * 7, b.y + 16, 3, 3, 40, 12, i < Math.round(M * 8) && on ? 'var(--c2)' : 'var(--off)', i < Math.round(M * 8) && on ? 55 : 18);
-    for (let i = 0; i < 3; i++) inner += block(b.x + 20 + i * 18, b.y + 66, 3, 12, 22, 14, 'var(--text)', 10);   // Lüfter
+    inner += tank(b.x + 30, b.y + 22, 3, 26, 26, 18, L, cpuC, on);                                      // CPU-Auslastung
+    if (n.la != null) inner += tank(b.x + 30, b.y + 52, 3, 26, 8, 18, n.la, hotC(n.la) || 'var(--c3)', on);   // Last
+    for (let i = 0; i < 8; i++) inner += tank(b.x + 66 + i * 7, b.y + 16, 3, 3, 40, 18, M * 8 - i, hotC(M) || 'var(--c2)', on);   // RAM-Riegel füllen sich nacheinander
+    if (n.disk != null) inner += tank(b.x + 92, b.y + 66, 3, 40, 26, 14, n.disk, hotC(n.disk) || 'var(--ok)', on);   // Systemplatte
+    for (let i = 0; i < 3; i++) inner += block(b.x + 20 + i * 18, b.y + 66, 3, 12, 22, 6, 'var(--text)', 10);   // Lüfter
     let front = '';
     for (let i = 0; i < 4; i++) front += onFront(b, b.w - 78 + i * 18, 4, 15, b.h - 12, `fill="${tint('var(--text)', 6)}" stroke="var(--g-edge)" stroke-width=".6"`) + onFront(b, b.w - 75 + i * 18, b.h - 7, 3, 1.5, `fill="${on ? 'var(--ok)' : 'var(--off)'}"`);
     front += onFront(b, 10, b.h - 9, 4, 4, `fill="${LEDC(n.st)}"${on ? ' class="blink"' : ''}`) + frontText(b, 18, b.h - 9.5, n.print || '');
@@ -219,7 +232,7 @@ const DRAW = {
     let inner = '', front = '';
     for (let i = 0; i < 4; i++) {
       const dk = (n.disks || [])[i], u = 10 + i * ((b.w - 20) / 4), du = (b.w - 20) / 4 - 6;
-      if (dk) inner += block(b.x + u, b.y + 14, 3, du, b.d - 30, b.h - 9, dk.health === false ? 'var(--bad)' : 'var(--accent)', 26 + Math.min(30, (dk.temperature || 30) - 20));
+      if (dk) inner += tank(b.x + u, b.y + 14, 3, du, b.d - 30, b.h - 6, dk.fill, dk.health === false ? 'var(--bad)' : hotC(dk.fill) || 'var(--accent)', true, true);
       else inner += poly([[b.x + u, b.y + 14, 3], [b.x + u + du, b.y + 14, 3], [b.x + u + du, b.y + b.d - 16, 3], [b.x + u, b.y + b.d - 16, 3]], 'fill="none" class="he"');
       front += onFront(b, u, 3, du, b.h - 7, `fill="${dk ? tint('var(--accent)', 14) : 'var(--inset)'}" stroke="${dk ? tint('var(--accent)', 60) : 'var(--line-2)'}" stroke-width=".7"${dk ? '' : ' stroke-dasharray="2 2"'}`)
         + onFront(b, u + 3, b.h - 7, 3, 1.6, `fill="${dk ? (dk.health === false ? 'var(--bad)' : 'var(--ok)') : 'var(--off)'}"${dk ? ' class="blink"' : ''}`);
@@ -306,11 +319,12 @@ function model(s) {
     if (d.ip) info.push(['IP', d.ip]);
     if (m.cpu != null) info.push(['CPU', pctTxt(m.cpu)]);
     if (m.mem != null) info.push(['RAM', pctTxt(m.mem)]);
+    if (m.disk != null) info.push([d.kind === 'nas' ? 'Belegt' : 'Platte', pctTxt(m.disk)]);
     for (const [k, v] of Object.entries(d.info || {})) info.push([k, String(v)]);
     const sub = m.sub || d.sub || (m.cpu != null && on ? `CPU ${pctTxt(m.cpu)}${m.mem != null ? ' · RAM ' + pctTxt(m.mem) : ''}` : st === 'bad' ? 'nicht erreichbar' : '');
-    const n = { id: d.id, kind: d.kind, label: d.name || d.id, sub, st, print: d.print || '', href: d.href, info, load: m.cpu, mem: m.mem, lxc: !!d.lxc,
+    const n = { id: d.id, kind: d.kind, label: d.name || d.id, sub, st, print: d.print || '', href: d.href, info, load: m.cpu, mem: m.mem, la: m.load, disk: m.disk, lxc: !!d.lxc,
       box: { x, y, z, w, d: dd, h }, host: d.host };
-    if (d.kind === 'nas') n.disks = Array.from({ length: d.disks ?? 4 }, () => ({ health: on, temperature: 34 }));
+    if (d.kind === 'nas') n.disks = Array.from({ length: d.disks ?? 4 }, () => ({ health: on, temperature: 34, fill: m.disk ?? 0 }));
     if (d.kind === 'switch') { n.portGeo = PG; n.ports = Array.from({ length: Math.min(28, d.ports || 24) }, (_, i) => ({ num: i + 1, status: 'notconnect', vlan: '1', name: '', rx: 0, tx: 0, target: null })); }
     N.push(n); byId[d.id] = n;
   }
