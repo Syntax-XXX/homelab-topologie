@@ -23,6 +23,9 @@
   .stage.drag { cursor: grabbing; }
   svg#g { width: 100%; height: 100%; display: block; transform-origin: 0 0; }
   svg#g.moving { will-change: transform; }
+  /* Pakete auf eigener GPU-Ebene: ihre Animation zeichnet nicht mehr die ganze Szene neu */
+  #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transform-origin: 0 0; will-change: transform; }
+  .hud, .chips { z-index: 3; }
   .ctl { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 2; }
   .ctl button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--panel) 94%, transparent); color: var(--text-2); cursor: pointer; font: 16px var(--mono); }
   .ctl button:hover { color: var(--text); background: var(--hover); }
@@ -114,7 +117,7 @@
   }
   @media (max-width: 899px) { .stage.sheeted .ctl, .stage.sheeted .legend { opacity: 0; pointer-events: none; } }
   @media (max-width: 640px) { .legend { display: none; } .hud span:nth-child(n+3) { display: none; } }
-    #g.moving .flow, #g.moving .blink, #g.moving .ring { animation-play-state: paused; }
+    .stage.moving .flow, .stage.moving .blink, .stage.moving .ring { animation-play-state: paused; }
   #g { shape-rendering: geometricPrecision; text-rendering: optimizeSpeed; }
   @media (prefers-reduced-motion: reduce) { .flow, .blink, .node.new { animation: none; } }
 </style>
@@ -138,6 +141,7 @@
         </defs>
         <g id="floor"></g><g id="scene"></g><g id="labels"></g>
       </svg>
+      <svg id="fx" aria-hidden="true"></svg>
       <div class="legend"><span><i style="background:var(--c2)"></i>LAN</span><span><i style="background:var(--c3)"></i>Storage</span><span><i style="background:var(--accent)"></i>Internet / Tunnel</span><span><i style="background:var(--ok)"></i>VM / Container</span><span>Tempo = Datenrate</span></div>
       <div class="ctl"><button id="zin" aria-label="Vergrößern">+</button><button id="zout" aria-label="Verkleinern">−</button><button id="fit" aria-label="Alles zeigen">⤢</button></div>
       <div class="tip" id="tip"></div>
@@ -372,27 +376,31 @@ function flowAttrs(e) {
 }
 const related = () => { const r = new Set(sel ? [sel] : []); if (sel) M.E.forEach(e => { if (e.f === sel) r.add(e.t); if (e.t === sel) r.add(e.f); }); return r; };
 function render(s) {
+  if (s && stage.classList.contains('moving')) { pendingS = s; return; }
   if (s) { ST = s; M = model(s); M.N.forEach(n => { n.fresh = !first && !known.has(n.id); known.add(n.id); }); }
   if (!M) return;
   if (sel && !M.N.some(n => n.id === sel)) sel = null;
   const rel = related(), dimN = id => sel && !rel.has(id), dimE = e => sel && e.f !== sel && e.t !== sel;
   const items = [];
   M.N.forEach(n => items.push([depthOf(n), `<g class="node ${n.st === 'off' ? 'off' : ''} ${n.fresh ? 'new' : ''} ${n.id === sel ? 'sel' : ''} ${dimN(n.id) ? 'dim' : ''}" data-id="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.label)}">${hit(n)}${pool(n)}${n.id === sel ? ring(n) : ''}${DRAW[n.kind](n)}</g>`]));
-  let airs = '';
+  let airs = '', F = '';
   M.E.forEach(e => {
     const dc = dimE(e) ? ' dim' : sel ? ' hot' : '';
     if (e.air) {
       const [x1, y1] = e.a, [x2, y2] = e.b, mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + e.arc, d = `M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
       const f = flowAttrs(e);
-      airs += `<g class="edge${dc}"><path d="${d}" class="wire" stroke="${tint(COL[e.cls], 40)}" ${e.cls === 'tun' ? 'stroke-dasharray="2 4"' : ''}/>` + (f ? `<path d="${d}" ${f}/>` : '')
+      if (f) F += `<g class="edge${dc}"><path d="${d}" ${f}/></g>`;
+      airs += `<g class="edge${dc}"><path d="${d}" class="wire" stroke="${tint(COL[e.cls], 40)}" ${e.cls === 'tun' ? 'stroke-dasharray="2 4"' : ''}/>`
         + (e.cls === 'tun' || e.label ? `<text class="plbl" x="${mx}" y="${my + e.arc * -.5 - 6}" text-anchor="middle" fill="var(--accent)">${esc(e.label || 'Tunnel')}</text>` : '') + '</g>';
       return;
     }
     const d = pathOf(e.pts), f = flowAttrs(e);
-    items.push([e.depth, `<g class="edge${dc}"><path d="${d}" class="wire ${e.virt ? 'v' : ''}" stroke="${tint(COL[e.cls], e.virt ? 35 : 50)}"/>` + (f ? `<path d="${d}" ${f}/>` : '') + '</g>']);
+    if (f) F += `<g class="edge${dc}"><path d="${d}" ${f}/></g>`;
+    items.push([e.depth, `<g class="edge${dc}"><path d="${d}" class="wire ${e.virt ? 'v' : ''}" stroke="${tint(COL[e.cls], e.virt ? 35 : 50)}"/></g>`]);
   });
   items.sort((a, b) => a[0] - b[0]);
   patch($('scene'), items.map(i => i[1]).join('') + airs);
+  patch($('fx'), F);
   // schwebende Glas-Schildchen über jedem Gerät
   let L = '';
   M.N.forEach(n => {
@@ -446,15 +454,17 @@ function select(id, port = null, fly = false) {
 // ── Kamera: Pan / Pinch / Doppeltipp / Hinfliegen ─────────────────────────
 let vb = { x: 0, y: 0, w: 1300, h: 800 }, anim = 0;
 const svg = $('g'), stage = $('stage');
-let rq = 0, mvT = 0, vbC = null;   // vbC = zuletzt wirklich gezeichnete viewBox
+let rq = 0, mvT = 0, vbC = null, pendingS = null; const fx = $('fx');   // vbC = zuletzt wirklich gezeichnete viewBox
 // Während Zoom/Pan nur das fertige Bild per GPU-transform verschieben/skalieren (wie Karten-Apps),
 // erst nach 140 ms Ruhe die viewBox setzen → einmal scharf neu zeichnen.
-const commit = () => { vbC = { ...vb }; svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); svg.style.transform = ''; svg.classList.remove('moving'); };
+const commit = () => { vbC = { ...vb }; const v = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`; svg.setAttribute('viewBox', v); fx.setAttribute('viewBox', v); svg.style.transform = fx.style.transform = ''; svg.classList.remove('moving'); stage.classList.remove('moving');
+  if (pendingS) { const p = pendingS; pendingS = null; render(p); } };
 const apply = (now = false) => {
   if (now || !vbC) { cancelAnimationFrame(rq); rq = 0; clearTimeout(mvT); commit(); return; }
-  svg.classList.add('moving'); clearTimeout(mvT); mvT = setTimeout(commit, 140);
+  svg.classList.add('moving'); stage.classList.add('moving'); clearTimeout(mvT);
+  if (!ptr.size) mvT = setTimeout(commit, 140);   // Finger noch drauf → erst beim Loslassen scharf zeichnen
   if (!rq) rq = requestAnimationFrame(() => { rq = 0; const W = stage.clientWidth, k = vbC.w / vb.w, s2 = W / vb.w;
-    svg.style.transform = `translate(${(vbC.x - vb.x) * s2}px,${(vbC.y - vb.y) * s2}px) scale(${k})`; });
+    svg.style.transform = fx.style.transform = `translate(${(vbC.x - vb.x) * s2}px,${(vbC.y - vb.y) * s2}px) scale(${k})`; });
 };
 const ratio = () => stage.clientWidth / stage.clientHeight;
 function tween(to, ms = 460) {
@@ -511,6 +521,7 @@ stage.addEventListener('pointermove', e => {
 function up(e) {
   if (!ptr.has(e.pointerId)) return;
   ptr.delete(e.pointerId); stage.classList.remove('drag');
+  if (!ptr.size && svg.classList.contains('moving')) { clearTimeout(mvT); mvT = setTimeout(commit, 60); }
   if (g?.pan && !g.moved && e.type === 'pointerup') tap(e);
   if (ptr.size === 1) { const [p] = [...ptr.values()]; g = { pan: true, sx: p.x, sy: p.y, vb: { ...vb }, moved: true }; } else if (!ptr.size) g = null;
 }
