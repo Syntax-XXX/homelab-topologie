@@ -123,6 +123,21 @@
   @media (prefers-reduced-motion: reduce) { .flow, .blink, .node.new { animation: none; } }
 </style>
 <style>.bare .topbar { display: none; } .topbar a.btn { text-decoration: none; }</style>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
+<style>
+  #g3 { position: absolute; inset: 0; display: block; touch-action: none; cursor: grab; }
+  #l3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+  .l3 { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; column-gap: 6px; padding: 5px 10px 6px; border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 84%, transparent); border: 1px solid var(--line-2); white-space: nowrap; transform-origin: 50% 100%; will-change: transform; transition: opacity .25s, border-color .2s; }
+  .l3 i { width: 7px; height: 7px; border-radius: 50%; }
+  .l3 b { font: 600 12px var(--sans); color: var(--text); }
+  .l3 span { grid-column: 1 / -1; text-align: center; font: 10.5px var(--mono); color: var(--text-3); }
+  .l3 span:empty { display: none; }
+  .l3.dim { opacity: .22; } .l3.sel { border-color: var(--accent); }
+  .ctl #v3d, .ctl #rk { font: 600 12px var(--sans); }
+  .ctl #rk { display: none; width: auto; padding: 0 12px; } .is3d .ctl #rk { display: block; }
+  .is3d .legend { display: none; }
+</style>
 </head>
 <body>
   <div class="main">
@@ -144,7 +159,7 @@
       </svg>
       <canvas id="fx" aria-hidden="true"></canvas>
       <div class="legend"><span><i style="background:var(--c2)"></i>LAN</span><span><i style="background:var(--c3)"></i>Storage</span><span><i style="background:var(--accent)"></i>Internet / Tunnel</span><span><i style="background:var(--ok)"></i>VM / Container</span><span>Tempo = Datenrate</span></div>
-      <div class="ctl"><button id="zin" aria-label="Vergrößern">+</button><button id="zout" aria-label="Verkleinern">−</button><button id="fit" aria-label="Alles zeigen">⤢</button></div>
+      <div class="ctl"><button id="rk" aria-label="Rack öffnen oder schließen">Öffnen</button><button id="v3d" aria-label="Zwischen 3D und 2D umschalten" aria-pressed="false">3D</button><button id="zin" aria-label="Vergrößern">+</button><button id="zout" aria-label="Verkleinern">−</button><button id="fit" aria-label="Alles zeigen">⤢</button></div>
       <div class="tip" id="tip"></div>
       <aside class="sheet" id="sheet" aria-label="Details"><div class="grab"></div><div id="sheetc"></div></aside>
     </div>
@@ -417,7 +432,8 @@ function render(s) {
   });
   items.sort((a, b) => a[0] - b[0]);
   FL = FLn; const sn = sel && M.N.find(n => n.id === sel); RG = sn ? ringPath(sn) : null;
-  const heavy = !s || first || Date.now() - lastHeavy > (vb.w < 900 ? 12000 : 4000);
+  const heavy = !view3d && (!s || first || Date.now() - lastHeavy > (vb.w < 900 ? 12000 : 4000));
+  if (view3d && T3) T3.update(M, sel);
   if (heavy) { lastHeavy = Date.now(); patch($('scene'), items.map(i => i[1]).join('') + airs); }
   // schwebende Glas-Schildchen über jedem Gerät
   let L = '';
@@ -466,7 +482,7 @@ function sheet() {
 }
 function select(id, port = null, fly = false) {
   sel = id; selPort = port; render();
-  const n = id && M.N.find(x => x.id === id); if (n && fly) flyTo(n);
+  const n = id && M.N.find(x => x.id === id); if (n && fly) view3d ? T3?.focus(id) : flyTo(n);
 }
 
 // ── Kamera: Pan / Pinch / Doppeltipp / Hinfliegen ─────────────────────────
@@ -482,7 +498,7 @@ const cssCol = v => { const m = /var\((--[\w-]+)\)/.exec(v); return !m ? v : (co
 new MutationObserver(() => { colC = {}; }).observe(document.documentElement, { attributes: true });
 function drawFx(t) {
   requestAnimationFrame(drawFx);
-  if (document.hidden || (!FL.length && !RG && idle)) return;   // nichts zu animieren → Canvas ruht
+  if (document.hidden || view3d || (!FL.length && !RG && idle)) return;   // nichts zu animieren → Canvas ruht
   idle = !FL.length && !RG;
   const dpr = Math.min(2, devicePixelRatio || 1), W = stage.clientWidth, H = stage.clientHeight;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
@@ -534,9 +550,9 @@ function zoomAt(f, cx, cy, animate = false) {   // cx/cy: Bildschirmpunkt, bleib
   const nw = Math.min(5000, Math.max(160, vb.w * f)), nh = nw / ratio(), to = { x: vb.x + (vb.w - nw) * fx, y: vb.y + (vb.h - nh) * fy, w: nw, h: nh };
   animate ? tween(to, 280) : (vb = to, apply());
 }
-stage.addEventListener('wheel', e => { e.preventDefault(); cancelAnimationFrame(anim); zoomAt(Math.exp(e.deltaY * (e.ctrlKey ? .01 : .0015)), e.clientX, e.clientY); }, { passive: false });
+stage.addEventListener('wheel', e => { if (view3d) return; e.preventDefault(); cancelAnimationFrame(anim); zoomAt(Math.exp(e.deltaY * (e.ctrlKey ? .01 : .0015)), e.clientX, e.clientY); }, { passive: false });
 const ptr = new Map(); let g = null, lastTap = { t: 0, id: null };
-const ui = e => e.target.closest('.ctl, .sheet, .chips');
+const ui = e => view3d || e.target.closest('.ctl, .sheet, .chips');
 stage.addEventListener('pointerdown', e => {
   if (ui(e)) return;
   stage.setPointerCapture(e.pointerId); ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); cancelAnimationFrame(anim);
@@ -566,9 +582,9 @@ function up(e) {
   if (ptr.size === 1) { const [p] = [...ptr.values()]; g = { pan: true, sx: p.x, sy: p.y, vb: { ...vb }, moved: true }; } else if (!ptr.size) g = null;
 }
 stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
-$('zin').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1 / 1.5, r.left + r.width / 2, r.top + r.height / 2, true); };
-$('zout').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.5, r.left + r.width / 2, r.top + r.height / 2, true); };
-$('fit').onclick = () => { select(null); fit(); };
+$('zin').onclick = () => { if (view3d) return T3?.zoom(1 / 1.5); const r = stage.getBoundingClientRect(); zoomAt(1 / 1.5, r.left + r.width / 2, r.top + r.height / 2, true); };
+$('zout').onclick = () => { if (view3d) return T3?.zoom(1.5); const r = stage.getBoundingClientRect(); zoomAt(1.5, r.left + r.width / 2, r.top + r.height / 2, true); };
+$('fit').onclick = () => { if (view3d) { select(null); return T3?.fit(); } select(null); fit(); };
 new ResizeObserver(() => { const r = ratio(); vb.h = vb.w / r; apply(true); }).observe(stage);
 
 // ── Antippen / Klicken ────────────────────────────────────────────────────
@@ -615,6 +631,33 @@ addEventListener('keydown', e => {
 let draft = null;
 const show = s => { try { render(draft ? { ...s, topology: draft } : s); } catch (e) { console.warn('Entwurf nicht darstellbar:', e.message); } };
 addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'pt-draft') { draft = e.data.topology; lastHeavy = 0; if (ST) show(ST.raw || ST); } });
+// ── 3D-Ansicht (Standard, Rack) ↔ 2D ──
+let view3d = false, T3 = null;
+const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2'); } catch { return false; } })();
+async function setView(on) {
+  if (on && !webgl) on = false;
+  view3d = on; document.documentElement.classList.toggle('is3d', on);
+  try { localStorage.setItem('pt.3d', on ? '1' : '0'); } catch {}
+  $('v3d').textContent = on ? '2D' : '3D'; $('v3d').setAttribute('aria-pressed', String(on));
+  svg.style.display = $('fx').style.display = on ? 'none' : '';
+  if (on && !T3) {
+    try {
+      const mod = await import('/topo3d.js');
+      T3 = mod.start(stage, {
+        col: cssCol,
+        dark: () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; },
+        pick: id => id ? select(id, null, id !== sel) : sel && select(null),
+        mode: on2 => { $('rk').textContent = on2 ? 'Rack' : 'Öffnen'; },
+        offset: () => !$('sheet').classList.contains('open') ? { x: 0, y: 0 } : innerWidth >= 900 ? { x: 190, y: 0 } : { x: 0, y: Math.round(stage.clientHeight * .24) },
+      });
+    } catch (e) { console.warn('3D nicht verfügbar:', e); return setView(false); }
+  }
+  T3?.show(on);
+  if (on) { if (M) T3.update(M, sel); if (/[?&]preview\b/.test(location.search) && !T3.exploded) T3.rack(false); } else { lastHeavy = 0; if (M) render(); }
+}   // Editor-Vorschau: gleich aufgeklappt
+$('v3d').onclick = () => setView(!view3d);
+$('rk').onclick = () => T3?.rack(T3.exploded);
+setView((() => { try { return localStorage.getItem('pt.3d') !== '0'; } catch { return true; } })());
 poll((s, err) => { if (s) { s.raw = s; show(s); } }, 3000);
 </script>
 </body>
