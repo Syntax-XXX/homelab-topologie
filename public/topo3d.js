@@ -217,8 +217,16 @@ export function start(stage, hooks) {
         if (!curve.curves.length) continue;
       }
       const len = curve.getLength();
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, e.air ? 48 : Math.max(8, curve.curves?.length * 2 || 8), e.cls === 'tun' ? .9 : 1.1, 6, false),
-        new THREE.MeshStandardMaterial({ color: color(COLVAR[e.cls]), transparent: true, opacity: e.virt ? .35 : .5, roughness: .4, emissive: color(COLVAR[e.cls]), emissiveIntensity: .15 }));
+      const mat = new THREE.MeshStandardMaterial({ color: color(COLVAR[e.cls]), transparent: true, opacity: e.virt ? .35 : .5, roughness: .4, emissive: color(COLVAR[e.cls]), emissiveIntensity: .15 });
+      const r = e.cls === 'tun' ? .9 : 1.1;
+      let tube;
+      if (e.air) tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, r, 8, false), mat);
+      else {   // je Teilstück eine gerade Röhre + Kugel an jeder Ecke: Röhre folgt exakt dem Pfad der Pakete (TubeGeometry über den ganzen Pfad schnitt die Ecken ab)
+        tube = new THREE.Group(); tube.material = mat;
+        curve.curves.forEach((c, k) => { tube.add(new THREE.Mesh(new THREE.TubeGeometry(c, 1, r, 8, false), mat));
+          const j = new THREE.Mesh(DOT, mat); j.scale.setScalar(r); j.position.copy(c.v2); tube.add(j);
+          if (!k) { const j0 = j.clone(); j0.position.copy(c.v1); tube.add(j0); } });
+      }
       tube.material.userData.base = tube.material.opacity; world.add(tube);
       const n = Math.max(2, Math.min(90, Math.round(len / 20)));
       edges.push({ e, curve, len, tube, n, start: total }); total += n;
